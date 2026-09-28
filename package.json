@@ -1,0 +1,22 @@
+{
+  "name": "xevbots-local",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Server bot — versione privacy (nessuna connessione a server esterni)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "api": "^6.1.3",
+    "boxen": "^8.0.0",
+    "chalk": "^5.4.0",
+    "https-proxy-agent": "^7.0.5",
+    "p-queue": "^8.0.1",
+    "proxy": "^4.1.0",
+    "smart-buffer": "^4.2.0",
+    "token": "^0.1.0",
+    "ws": "^8.21.3"
+  }
+}
