@@ -13,7 +13,7 @@ export const config = {
     },
     proxySettings: {
         protocol: "http",
-        enableProxy: false,
+        enableProxy: true,
         // Ruota proxy round-robin invece di shift/push (non consuma la lista)
         rotationMode: "round-robin",
     },
