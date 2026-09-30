@@ -66,7 +66,7 @@ export const config = {
     },
     // Statistiche esposte via HTTP /stats (JSON)
     stats: {
-        enable: false,
+        enable: true,
         path: '/stats',
     },
 };
