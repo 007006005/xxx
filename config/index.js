@@ -7,20 +7,20 @@ export const config = {
         keyPath: 'path/to/privkey.pem',
         certPath: 'path/to/fullchain.pem',
         // Numero massimo di client contemporanei (protezione DDoS leggero)
-        maxClients: 10,
+        maxClients: 250,
         // Heartbeat interval ms per rilevare client zombie
-        heartbeatInterval: 1000,
+        heartbeatInterval: 100,
     },
     proxySettings: {
         protocol: "http",
-        enableProxy: true
+        enableProxy: true,
         // Ruota proxy round-robin invece di shift/push (non consuma la lista)
         rotationMode: "round-robin",
     },
     facebookBotSettings: {
         // Quanti bot lanciare se il client (interfaccia del gioco) non ne
         // specifica un numero: basta cambiare questo valore.
-        botAmount: 10,
+        botAmount: 150,
         // Tetto massimo di bot per partita (evita di sovraccaricare il PC).
         maxBots: 400,
         // true = usa i token Facebook dal file data/tokens.json per tutti bot
@@ -54,7 +54,7 @@ export const config = {
         },
         // FIX: delay in ms tra uno spawn e il successivo (anti-flood).
         // Prima era 300; ora 0 per respawn immediato (massima velocità).
-        spawnDelay: 0.000001,
+        spawnDelay: 00,
         // Quante volte un bot può morire prima di fermarsi (0 = infinito)
         maxDeaths: 0,
         // Auto-reconnect se il WS cade
