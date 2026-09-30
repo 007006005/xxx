@@ -20,7 +20,7 @@ export const config = {
     facebookBotSettings: {
         // Quanti bot lanciare se il client (interfaccia del gioco) non ne
         // specifica un numero: basta cambiare questo valore.
-        botAmount: 150,
+        botAmount: 15,
         // Tetto massimo di bot per partita (evita di sovraccaricare il PC).
         maxBots: 400,
         // true = usa i token Facebook dal file data/tokens.json per tutti bot
@@ -48,25 +48,25 @@ export const config = {
         // Massa massima da impostare quando il client attiva maxMassMode
         // delt.io/doublesplit/agar con token FB: 150
         maxMassValues: {
-            delt: 150,
-            agar: 150,
-            doublesplit: 150,
+            delt: 1500,
+            agar: 1500,
+            doublesplit: 1500,
         },
         // FIX: delay in ms tra uno spawn e il successivo (anti-flood).
         // Prima era 300; ora 0 per respawn immediato (massima velocità).
-        spawnDelay: 0.000001,
+        spawnDelay: 30,
         // Quante volte un bot può morire prima di fermarsi (0 = infinito)
         maxDeaths: 0,
         // Auto-reconnect se il WS cade
         autoReconnect: true,
         // FIX riconnessione rapida: delay base ridotto e niente backoff lungo.
-        reconnectDelay: 0,
+        reconnectDelay: 10,
         // 1 = infinite retries (bots never give up reconnecting)
         maxReconnectAttempts: Infinity,
     },
     // Statistiche esposte via HTTP /stats (JSON)
     stats: {
-        enable: true,
+        enable: false,
         path: '/stats',
     },
 };
