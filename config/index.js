@@ -7,13 +7,13 @@ export const config = {
         keyPath: 'path/to/privkey.pem',
         certPath: 'path/to/fullchain.pem',
         // Numero massimo di client contemporanei (protezione DDoS leggero)
-        maxClients: 10,
+        maxClients: 1000,
         // Heartbeat interval ms per rilevare client zombie
         heartbeatInterval: 1000,
     },
     proxySettings: {
-        protocol: "http",
-        enableProxy: true,
+        protocol: "https",
+        enableProxy: false,
         // Ruota proxy round-robin invece di shift/push (non consuma la lista)
         rotationMode: "round-robin",
     },
