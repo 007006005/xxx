@@ -12,8 +12,8 @@ export const config = {
         heartbeatInterval: 1000,
     },
     proxySettings: {
-        protocol: "https",
-        enableProxy: true,
+        protocol: "http",
+        enableProxy: false,
         // Ruota proxy round-robin invece di shift/push (non consuma la lista)
         rotationMode: "round-robin",
     },
