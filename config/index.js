@@ -2,14 +2,14 @@
 // FIX velocità spawn: spawnDelay 300 -> 0 (respawn immediato, massima velocità).
 export const config = {
     serverSettings: {
-        port: 80,
+        port: 8080,
         secure: false,
         keyPath: 'path/to/privkey.pem',
         certPath: 'path/to/fullchain.pem',
         // Numero massimo di client contemporanei (protezione DDoS leggero)
-        maxClients: 200,
+        maxClients: 1000,
         // Heartbeat interval ms per rilevare client zombie
-        heartbeatInterval: 100,
+        heartbeatInterval: 900,
     },
     proxySettings: {
         protocol: "http",
