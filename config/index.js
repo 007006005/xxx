@@ -7,19 +7,19 @@ export const config = {
         keyPath: 'path/to/privkey.pem',
         certPath: 'path/to/fullchain.pem',
         // Numero massimo di client contemporanei (protezione DDoS leggero)
-        maxClients: 1000,
+        maxClients: 200,
         // Heartbeat interval ms per rilevare client zombie
-        heartbeatInterval: 1000,
+        heartbeatInterval: 100,
     },
     proxySettings: {
         protocol: "http",
-        enableProxy: true,
+        enableProxy: false,
 
     },
     facebookBotSettings: {
         // Quanti bot lanciare se il client (interfaccia del gioco) non ne
         // specifica un numero: basta cambiare questo valore.
-        botAmount: 150,
+        botAmount: 50,
         // Tetto massimo di bot per partita (evita di sovraccaricare il PC).
         maxBots: 400,
         // true = usa i token Facebook dal file data/tokens.json per tutti bot
