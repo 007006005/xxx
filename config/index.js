@@ -12,7 +12,7 @@ export const config = {
         heartbeatInterval: 900,
     },
    proxySettings: {
-        scrape: true,
+
         timeout: 2000,
         protocol: "http",
         enableProxy: true,
