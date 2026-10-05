@@ -5,7 +5,6 @@ import https from "https";
 import { config } from "../config/index.js";
 import { fileURLToPath } from 'url';
 import { logger } from './logger.js';
-import { HttpsProxyAgent } from "https-proxy-agent";
 const MASS_BOOST_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), '../data/boost.json');
 export const helper = {
     proxies: [],
@@ -74,14 +73,6 @@ export const helper = {
         catch (error) {
             logger.warn(`Error reading proxies from file: ${error.message}`);
         }
-    },
-    getProxy() {
-        const protocol = config.proxySettings.protocol;
-        const proxy = this.proxies.shift();
-        this.proxies.push(proxy);
-        if (!config.proxySettings.enableProxy)
-            return undefined;
-        return new HttpsProxyAgent(`${protocol}://${proxy}`);
     },
     generateHeaders() {
         const langs = [
