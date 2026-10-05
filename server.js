@@ -10,8 +10,13 @@ import { helper, logger } from "./utils/index.js";
 import { WebSocketServer } from 'ws';
 import TokenManager from './core/TokenManager.js';
 import { fetchProxies } from './scripts/fetchProxies.js';
+import ProxyRotator from './core/ProxyRotator.js';
+import { HttpsProxyAgent } from 'https-proxy-agent';
 
 const manager = new TokenManager();
+const proxyRotator = new ProxyRotator([], {
+  retryTimeout: config.proxySettings?.retryTimeout ?? 60 * 1000,
+});
 const server = helper.createServer();
 const wss = new WebSocketServer({ server });
 
@@ -20,6 +25,22 @@ const globalStats = {
   connectedClients: 0,
   totalBotsSpawned: 0,
   startTime: Date.now(),
+  proxiesRotated: 0,
+  proxyFailures: 0,
+};
+
+// Sincronizza il rotator con la lista proxy caricata da helper
+const syncProxyRotator = () => proxyRotator.setProxies(helper.proxies);
+
+// helper.getProxy() ora ruota tramite ProxyRotator (round-robin tra proxy sani)
+helper.getProxy = function getProxy() {
+  if (!config.proxySettings.enableProxy) return undefined;
+  const proxy = proxyRotator.getNextProxy();
+  if (!proxy) return undefined;
+  globalStats.proxiesRotated++;
+  const agent = new HttpsProxyAgent(`${config.proxySettings.protocol}://${proxy}`);
+  agent.proxyAddress = proxy;
+  return agent;
 };
 
 // ═══ HTTP handler ═══
@@ -40,6 +61,18 @@ server.on('request', (req, res) => {
       totalBotsSpawned: globalStats.totalBotsSpawned,
       validTokens: manager.vt?.length ?? 0,
       proxies: helper.proxies.length,
+    });
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(payload);
+    return;
+  }
+  // Endpoint statistiche proxy
+  if (req.url === '/proxy-stats') {
+    const payload = JSON.stringify({
+      enabled: !!config.proxySettings.enableProxy,
+      proxiesRotated: globalStats.proxiesRotated,
+      proxyFailures: globalStats.proxyFailures,
+      ...proxyRotator.getStats(),
     });
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(payload);
@@ -103,6 +136,7 @@ const port = process.env.PORT || config.serverSettings.port;
 
 // 1. Proxy esistenti subito
 helper.setupProxies();
+syncProxyRotator();
 
 // 2. Server attivo immediatamente
 server.listen(port, () => {
@@ -111,7 +145,10 @@ server.listen(port, () => {
 
 // 3. Fetch proxy fresh in background
 fetchProxies({ skipTest: true }).then(count => {
-  if (count > 0) helper.setupProxies();
+  if (count > 0) {
+    helper.setupProxies();
+    syncProxyRotator();
+  }
   logger.info(`Fetched ${count} fresh proxies`);
 }).catch(e => {
   logger.warn(`Proxy fetch failed: ${e.message}`);
@@ -120,7 +157,10 @@ fetchProxies({ skipTest: true }).then(count => {
 // 4. Refresh proxy ogni ora
 const proxyRefreshInterval = setInterval(() => {
   fetchProxies({ skipTest: true }).then(count => {
-    if (count > 0) helper.setupProxies();
+    if (count > 0) {
+      helper.setupProxies();
+      syncProxyRotator();
+    }
     logger.info(`Refreshed ${count} proxies`);
   }).catch(e => {
     logger.warn(`Proxy refresh failed: ${e.message}`);
@@ -140,6 +180,7 @@ const gracefulShutdown = (signal) => {
   shuttingDown = true;
   logger.info(`Received ${signal}, shutting down gracefully...`);
   clearInterval(proxyRefreshInterval);
+  proxyRotator.destroy();
   wss.clients.forEach((ws) => {
     if (ws.readyState === ws.OPEN) ws.close(1001, 'Server shutting down');
   });
@@ -179,4 +220,4 @@ server.on('error', (err) => {
   }
 });
 
-export { manager, globalStats };
+export { manager, globalStats, proxyRotator };
