@@ -2,7 +2,7 @@
 // FIX velocità spawn: spawnDelay 300 -> 0 (respawn immediato, massima velocità).
 export const config = {
     serverSettings: {
-        port: 8080,
+        port: 80,
         secure: false,
         keyPath: 'path/to/privkey.pem',
         certPath: 'path/to/fullchain.pem',
@@ -13,7 +13,7 @@ export const config = {
     },
     proxySettings: {
         protocol: "http",
-        enableProxy: false,
+        enableProxy: true,
 
     },
     facebookBotSettings: {
