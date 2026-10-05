@@ -11,11 +11,10 @@ export const config = {
         // Heartbeat interval ms per rilevare client zombie
         heartbeatInterval: 900,
     },
-   proxySettings: {
-
-        timeout: 2000,
+    proxySettings: {
         protocol: "http",
         enableProxy: true,
+
     },
     facebookBotSettings: {
         // Quanti bot lanciare se il client (interfaccia del gioco) non ne
