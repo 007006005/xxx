@@ -3,7 +3,7 @@
 export const config = {
     serverSettings: {
         port: 8080,
-        secure: false,
+        secure: true,
         keyPath: 'path/to/privkey.pem',
         certPath: 'path/to/fullchain.pem',
         // Numero massimo di client contemporanei (protezione DDoS leggero)
@@ -13,13 +13,13 @@ export const config = {
     },
     proxySettings: {
         protocol: "http",
-        enableProxy: false,
+        enableProxy: true,
 
     },
     facebookBotSettings: {
         // Quanti bot lanciare se il client (interfaccia del gioco) non ne
         // specifica un numero: basta cambiare questo valore.
-        botAmount: 50,
+        botAmount: 10,
         // Tetto massimo di bot per partita (evita di sovraccaricare il PC).
         maxBots: 400,
         // true = usa i token Facebook dal file data/tokens.json per tutti bot
