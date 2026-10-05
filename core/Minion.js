@@ -1,6 +1,6 @@
 import WebSocket from "ws";
 import Entity from "./Entity.js";
-import { manager } from "../server.js";
+import { manager, globalStats, proxyRotator } from "../server.js";
 import { SmartBuffer } from "smart-buffer";
 import { buffers, helper, logger } from "../utils/index.js";
 import { config } from "../config/index.js";
@@ -98,6 +98,11 @@ export class Minion {
     }
   }
   onerror() {
+    // Errore prima dell'handshake: il proxy è probabilmente non funzionante
+    if (!this.isConnected && this.proxyAgent?.proxyAddress) {
+      proxyRotator.markProxyAsFailed(this.proxyAgent.proxyAddress);
+      globalStats.proxyFailures++;
+    }
     this.isClosed = true;
     this.clearTimeouts();
     this.clearIntervals();
