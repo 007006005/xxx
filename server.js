@@ -1,9 +1,4 @@
-// server.js — ZeroExtens Bots PRO (improved)
-// Miglioramenti:
-//  - Health check risponde 200 (non 500!)
-//  - Endpoint /stats restituisce JSON live (client connessi, bot totali, uptime)
-//  - Heartbeat per rilevare e chiudere client zombie
-//  - Limite maxClients per evitare overload
+// server.js — ZeroExtens Bots PRO (Complete & Fixed)
 import { config } from './config/index.js';
 import Client from './core/Client.js';
 import { helper, logger } from "./utils/index.js";
@@ -29,10 +24,8 @@ const globalStats = {
   proxyFailures: 0,
 };
 
-// Sincronizza il rotator con la lista proxy caricata da helper
 const syncProxyRotator = () => proxyRotator.setProxies(helper.proxies);
 
-// helper.getProxy() ora ruota tramite ProxyRotator (round-robin tra proxy sani)
 helper.getProxy = function getProxy() {
   if (!config.proxySettings.enableProxy) return undefined;
   const proxy = proxyRotator.getNextProxy();
@@ -45,17 +38,18 @@ helper.getProxy = function getProxy() {
 
 // ═══ HTTP handler ═══
 server.on('request', (req, res) => {
-  // Health check (Render, Railway, Fly.io)
+  // Health check corretto a 200 per Render
   if (req.url === '/' || req.url === '/health') {
-    res.writeHead(500, { 'Content-Type': 'text/plain' });
-    res.end('XevBots OK');
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('ZeroTheLegend Backend OK');
     return;
   }
+  
   // Endpoint statistiche live
   if (config.stats?.enable && req.url === (config.stats?.path || '/stats')) {
     const uptime = Math.floor((Date.now() - globalStats.startTime) / 1000);
     const payload = JSON.stringify({
-      version: '2.0',
+      version: '8.4',
       uptime,
       connectedClients: globalStats.connectedClients,
       totalBotsSpawned: globalStats.totalBotsSpawned,
@@ -66,6 +60,7 @@ server.on('request', (req, res) => {
     res.end(payload);
     return;
   }
+  
   // Endpoint statistiche proxy
   if (req.url === '/proxy-stats') {
     const payload = JSON.stringify({
@@ -82,9 +77,8 @@ server.on('request', (req, res) => {
   res.end();
 });
 
-// ═══ WebSocket ═══
+// ═══ WebSocket Server ═══
 wss.on('connection', (ws) => {
-  // Limite massimo client
   const maxC = config.serverSettings.maxClients || 500;
   if (globalStats.connectedClients >= maxC) {
     logger.warn(`Max clients (${maxC}) reached, rejecting connection`);
@@ -92,14 +86,9 @@ wss.on('connection', (ws) => {
     return;
   }
 
-  const client = new Client(ws);
+  const client = new Client(ws, globalStats);
   globalStats.connectedClients++;
   logger.info(`Client Connected (${globalStats.connectedClients}/${maxC})`);
-
-  // NOTA: NON inviamo [0xFF][2] qui — il client XevBots originale non capisce
-  // messaggi inaspettati dal server e chiude la connessione immediatamente.
-  // La versione del server viene comunicata solo tramite log; gli opcode 8/9/11
-  // possono essere aggiunti in futuro quando il client è pronto a riceverli.
 
   const handleDisconnect = () => {
     client.stopBots();
@@ -111,17 +100,18 @@ wss.on('connection', (ws) => {
     try {
       client.handleMessage(buffer);
     } catch (e) {
-      logger.warn('Server: corrupted message — dropped');
+      logger.warn(`Server: corrupted message — dropped: ${e.message}`);
     }
   });
+
   ws.on('close', handleDisconnect);
   ws.on('error', handleDisconnect);
 
-  // Heartbeat: chiudi client zombie (nessuna attività per 60s)
-  const heartbeatMs = config.serverSettings.heartbeatInterval || 2000;
+  // Heartbeat per client zombie
+  const heartbeatMs = config.serverSettings.heartbeatInterval || 5000;
   const heartbeat = setInterval(() => {
-    const idle = Date.now() - client.lastActivity;
-    if (idle > 6000) {
+    const idle = Date.now() - (client.lastActivity || Date.now());
+    if (idle > 60000) {
       logger.warn(`Client zombie detected (idle ${Math.floor(idle/1000)}s), closing`);
       clearInterval(heartbeat);
       ws.terminate();
@@ -131,19 +121,16 @@ wss.on('connection', (ws) => {
   ws.on('close', () => clearInterval(heartbeat));
 });
 
-// ═══ Avvio ═══
+// ═══ Avvio Server ═══
 const port = process.env.PORT || config.serverSettings.port;
 
-// 1. Proxy esistenti subito
 helper.setupProxies();
 syncProxyRotator();
 
-// 2. Server attivo immediatamente
 server.listen(port, () => {
   logger.info(`Server started on port ${port} with ${helper.proxies.length} proxies`);
 });
 
-// 3. Fetch proxy fresh in background
 fetchProxies({ skipTest: true }).then(count => {
   if (count > 0) {
     helper.setupProxies();
@@ -154,7 +141,6 @@ fetchProxies({ skipTest: true }).then(count => {
   logger.warn(`Proxy fetch failed: ${e.message}`);
 });
 
-// 4. Refresh proxy ogni ora
 const proxyRefreshInterval = setInterval(() => {
   fetchProxies({ skipTest: true }).then(count => {
     if (count > 0) {
@@ -167,14 +153,12 @@ const proxyRefreshInterval = setInterval(() => {
   });
 }, 60 * 60 * 1000);
 
-// 5. Verifica token in background (non blocca l'avvio)
 manager.checkTokens((count) => {
   logger.info(`TokenManager: ${count} valid token(s) loaded`);
 });
 
 // ═══ Graceful Shutdown ═══
 let shuttingDown = false;
-
 const gracefulShutdown = (signal) => {
   if (shuttingDown) return;
   shuttingDown = true;
@@ -190,34 +174,10 @@ const gracefulShutdown = (signal) => {
       process.exit(0);
     });
   });
-  setTimeout(() => {
-    logger.warn('Force closing after 10s timeout');
-    process.exit(1);
-  }, 1000);
+  setTimeout(() => process.exit(1), 10000);
 };
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-
-process.on('uncaughtException', (err) => {
-  logger.warn(`Uncaught Exception: ${err.message}`);
-});
-
-process.on('unhandledRejection', (err) => {
-  logger.warn(`Unhandled Rejection: ${err?.message || String(err)}`);
-});
-
-wss.on('error', (err) => {
-  logger.warn(`WebSocket server error: ${err.message}`);
-});
-
-server.on('error', (err) => {
-  if (err.code === 'EADDRINUSE') {
-    logger.warn(`Port ${port} is already in use`);
-    process.exit(1);
-  } else {
-    logger.warn(`Server error: ${err.message}`);
-  }
-});
 
 export { manager, globalStats, proxyRotator };
