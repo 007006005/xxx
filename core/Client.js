@@ -1,3 +1,4 @@
+// core/Client.js — Zero The Legend Backend PRO (Complete & Fixed)
 import { WebSocket } from "ws";
 import { Minion } from "./Minion.js";
 import { buffers, logger } from "../utils/index.js";
@@ -33,10 +34,10 @@ export default class Client {
     this.bots = [];
     this.userX = 0;
     this.userY = 0;
-    this.botAi = false; // false = farming, true = follow (o viceversa a seconda della logica)
+    this.botAi = false;
     this.server = null;
     this.botName = "ȤÊɌØ IS GOD";
-    this.botAmount = config.facebookBotSettings.botAmount;
+    this.botAmount = config.facebookBotSettings?.botAmount || 150;
     this.rQuadrant = 0;
     this.botInt = null;
     this.playerName = "ȤÊɌØ IS GOD";
@@ -55,6 +56,7 @@ export default class Client {
 
   async handleMessage(buffer) {
     const reader = SmartBuffer.fromBuffer(buffer);
+    if (reader.remaining() < 1) return;
     const opcode = reader.readUInt8();
 
     switch (opcode) {
@@ -69,7 +71,7 @@ export default class Client {
         
         this.botAmount = Math.max(
           1,
-          Math.min(this.botAmount, config.facebookBotSettings.maxBots || 2000)
+          Math.min(this.botAmount, config.facebookBotSettings?.maxBots || 2000)
         );
         this.startBots();
         break;
@@ -78,13 +80,12 @@ export default class Client {
         this.stopBots();
         break;
 
-      case 2: // SET MODE (Farming / Follow - Inviato dal tasto I o dal menu)
+      case 2: // SET MODE (Farming / Follow - Tasto I)
         {
           const subType = reader.readUInt8();
           if (subType === 1) {
             const modeVal = reader.readUInt8();
-            // 1 = farming, 2 = follow
-            this.botAi = (modeVal === 2);
+            this.botAi = (modeVal === 2); // 2 = follow, 1 = farming
           }
         }
         break;
@@ -92,7 +93,7 @@ export default class Client {
       case 3: // FEED (Tasto C)
         for (const bot of this.bots) {
           if (bot.ws?.readyState === 1 && bot.isAlive) {
-            bot.send(buffers.eject(), true);
+            typeof bot.eject === "function" ? bot.eject() : bot.send(buffers.eject(), true);
           }
         }
         break;
@@ -100,30 +101,31 @@ export default class Client {
       case 4: // SPLIT (Tasto Z)
         for (const bot of this.bots) {
           if (bot.ws?.readyState === 1 && bot.isAlive) {
-            bot.send(buffers.split(), true);
+            typeof bot.split === "function" ? bot.split() : bot.send(buffers.split(), true);
           }
+        }
+        break;
+
+      case 5: // COORDINATE MOUSE / FOLLOW (Supporta sia 5 che 23)
+      case 23:
+        this.userX = reader.readInt32LE();
+        this.userY = reader.readInt32LE();
+        // Propaga immediatamente le coordinate a tutti i bot attivi affinché si muovano!
+        for (const bot of this.bots) {
+          bot.userX = this.userX;
+          bot.userY = this.userY;
         }
         break;
 
       case 6: // SHIELD / ANTI-VIRUS (Tasto V)
-        // Legge 1 byte booleano (0 o 1)
         this.botVShield = !!reader.readUInt8();
         logger.info(`Client Shield Anti-Virus: ${this.botVShield ? "ON" : "OFF"}`);
         break;
 
-      case 23: // MOUSE POSITION / FOLLOW (Inviato ogni 35ms in modalità Follow)
-      case 5:
-        this.userX = reader.readInt32LE();
-        this.userY = reader.readInt32LE();
-        for (const bot of this.bots) {
-          if (bot.ws?.readyState === 1 && bot.isAlive) {
-            bot.setTarget(this.userX, this.userY);
-          }
+      case 7: // AUTO-RECONNECT / QUADRANT
+        if (reader.remaining() >= 1) {
+          this.rQuadrant = reader.readUInt8();
         }
-        break;
-
-      case 7: // AUTO-RECONNECT O CONFIG EXTRA
-        this.rQuadrant = reader.readUInt8();
         break;
     }
   }
@@ -135,7 +137,7 @@ export default class Client {
       const maxBots = this.botAmount;
 
       this.botInt = setInterval(() => {
-        if (this.bots.length < maxBots) {
+        if (this.bots.length < maxBots && !this.stoppedBots) {
           this.bots.push(new Minion(this));
         }
       }, 300);
@@ -172,7 +174,9 @@ export default class Client {
       this.stoppedBots = true;
       this.startedBots = false;
       this.botTimeout.length = 0;
-      this.ws?.send(Buffer.from([1]));
+      try {
+        this.ws?.send(Buffer.from([1]));
+      } catch (e) {}
       logger.warn(`Client Bots Stopped!`);
     }
   }
