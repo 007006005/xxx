@@ -7,7 +7,7 @@ export const config = {
         keyPath: 'path/to/privkey.pem',
         certPath: 'path/to/fullchain.pem',
         // Numero massimo di client contemporanei (protezione DDoS leggero)
-        maxClients: 1,
+        maxClients: 1000,
         // Heartbeat interval ms per rilevare client zombie
         heartbeatInterval: 1100,
     },
