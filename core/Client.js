@@ -161,6 +161,33 @@ export default class Client {
       logger.info(`Client Starting Bots (${maxBots}) for server: ${this.server}`);
     }
   }
+  case 3: // FEED (Tasto C)
+        logger.info(`[SERVER] Ricevuto comando FEED (Opcode 3) da ${this.bots.length} bot attivi`);
+        for (const bot of this.bots) {
+          if (bot.ws?.readyState === 1) {
+            // Invia direttamente il buffer di feed o chiama la funzione del minion
+            if (typeof bot.eject === "function") {
+              bot.eject();
+            } else {
+              bot.send(buffers.eject(), true);
+            }
+          }
+        }
+        break;
+
+      case 4: // SPLIT (Tasto Z)
+        logger.info(`[SERVER] Ricevuto comando SPLIT (Opcode 4) da ${this.bots.length} bot attivi`);
+        for (const bot of this.bots) {
+          if (bot.ws?.readyState === 1) {
+            // Invia direttamente il buffer di split o chiama la funzione del minion
+            if (typeof bot.split === "function") {
+              bot.split();
+            } else {
+              bot.send(buffers.split(), true);
+            }
+          }
+        }
+        break;
 
   stopBots() {
     if (this.startedBots || !this.stoppedBots) {
