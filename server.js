@@ -1,4 +1,4 @@
-// server.js — ZeroExtens Bots PRO (Complete & Fixed)
+// server.js — Zero The Legend Backend PRO (Complete & Optimized for Render)
 import { config } from './config/index.js';
 import Client from './core/Client.js';
 import { helper, logger } from "./utils/index.js";
@@ -38,7 +38,7 @@ helper.getProxy = function getProxy() {
 
 // ═══ HTTP handler ═══
 server.on('request', (req, res) => {
-  // Health check corretto a 200 per Render
+  // Health check essenziale per mantenere attivo il servizio su Render
   if (req.url === '/' || req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('ZeroTheLegend Backend OK');
@@ -49,7 +49,7 @@ server.on('request', (req, res) => {
   if (config.stats?.enable && req.url === (config.stats?.path || '/stats')) {
     const uptime = Math.floor((Date.now() - globalStats.startTime) / 1000);
     const payload = JSON.stringify({
-      version: '8.4',
+      version: '9.9.0',
       uptime,
       connectedClients: globalStats.connectedClients,
       totalBotsSpawned: globalStats.totalBotsSpawned,
@@ -73,6 +73,7 @@ server.on('request', (req, res) => {
     res.end(payload);
     return;
   }
+  
   res.writeHead(404);
   res.end();
 });
@@ -107,7 +108,7 @@ wss.on('connection', (ws) => {
   ws.on('close', handleDisconnect);
   ws.on('error', handleDisconnect);
 
-  // Heartbeat per client zombie
+  // Heartbeat per individuare ed eliminare client zombie
   const heartbeatMs = config.serverSettings.heartbeatInterval || 5000;
   const heartbeat = setInterval(() => {
     const idle = Date.now() - (client.lastActivity || Date.now());
