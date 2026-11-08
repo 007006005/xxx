@@ -1,4 +1,4 @@
-// core/Client.js — Zero The Legend Backend PRO (Complete & Fixed)
+// core/Client.js — Zero The Legend Backend PRO (Fixed Syntax)
 import { WebSocket } from "ws";
 import { Minion } from "./Minion.js";
 import { buffers, logger } from "../utils/index.js";
@@ -60,7 +60,7 @@ export default class Client {
     const opcode = reader.readUInt8();
 
     switch (opcode) {
-      case 0: // START BOTS (Legge Server, Nome, le 4 Porte e la Quantità)
+      case 0: {
         this.server = reader.readStringNT();
         this.botName = reader.readStringNT();
         this.port1 = reader.readStringNT();
@@ -75,58 +75,67 @@ export default class Client {
         );
         this.startBots();
         break;
+      }
 
-      case 1: // STOP BOTS
+      case 1: {
         this.stopBots();
         break;
+      }
 
-      case 2: // SET MODE (Farming / Follow - Tasto I)
-        {
-          const subType = reader.readUInt8();
-          if (subType === 1) {
-            const modeVal = reader.readUInt8();
-            this.botAi = (modeVal === 2); // 2 = follow, 1 = farming
-          }
+      case 2: {
+        const subType = reader.readUInt8();
+        if (subType === 1) {
+          const modeVal = reader.readUInt8();
+          this.botAi = (modeVal === 2);
         }
         break;
+      }
 
-      case 3: // FEED (Tasto C)
+      case 3: { // FEED (Tasto C)
+        logger.info(`[SERVER] Comando FEED (Opcode 3)`);
         for (const bot of this.bots) {
           if (bot.ws?.readyState === 1 && bot.isAlive) {
-            typeof bot.eject === "function" ? bot.eject() : bot.send(buffers.eject(), true);
+            if (typeof bot.eject === "function") bot.eject();
+            else bot.send(buffers.eject(), true);
           }
         }
         break;
+      }
 
-      case 4: // SPLIT (Tasto Z)
+      case 4: { // SPLIT (Tasto Z)
+        logger.info(`[SERVER] Comando SPLIT (Opcode 4)`);
         for (const bot of this.bots) {
           if (bot.ws?.readyState === 1 && bot.isAlive) {
-            typeof bot.split === "function" ? bot.split() : bot.send(buffers.split(), true);
+            if (typeof bot.split === "function") bot.split();
+            else bot.send(buffers.split(), true);
           }
         }
         break;
+      }
 
-      case 5: // COORDINATE MOUSE / FOLLOW (Supporta sia 5 che 23)
-      case 23:
+      case 5:
+      case 23: {
         this.userX = reader.readInt32LE();
         this.userY = reader.readInt32LE();
-        // Propaga immediatamente le coordinate a tutti i bot attivi affinché si muovano!
         for (const bot of this.bots) {
           bot.userX = this.userX;
           bot.userY = this.userY;
         }
         break;
+      }
 
-      case 6: // SHIELD / ANTI-VIRUS (Tasto V)
+      case 6: {
         this.botVShield = !!reader.readUInt8();
         logger.info(`Client Shield Anti-Virus: ${this.botVShield ? "ON" : "OFF"}`);
         break;
+      }
 
-      case 7: // AUTO-RECONNECT / QUADRANT
+      case 7: {
         if (reader.remaining() >= 1) {
           this.rQuadrant = reader.readUInt8();
         }
         break;
+      }
     }
   }
 
@@ -161,33 +170,6 @@ export default class Client {
       logger.info(`Client Starting Bots (${maxBots}) for server: ${this.server}`);
     }
   }
-  case 3: // FEED (Tasto C)
-        logger.info(`[SERVER] Ricevuto comando FEED (Opcode 3) da ${this.bots.length} bot attivi`);
-        for (const bot of this.bots) {
-          if (bot.ws?.readyState === 1) {
-            // Invia direttamente il buffer di feed o chiama la funzione del minion
-            if (typeof bot.eject === "function") {
-              bot.eject();
-            } else {
-              bot.send(buffers.eject(), true);
-            }
-          }
-        }
-        break;
-
-      case 4: // SPLIT (Tasto Z)
-        logger.info(`[SERVER] Ricevuto comando SPLIT (Opcode 4) da ${this.bots.length} bot attivi`);
-        for (const bot of this.bots) {
-          if (bot.ws?.readyState === 1) {
-            // Invia direttamente il buffer di split o chiama la funzione del minion
-            if (typeof bot.split === "function") {
-              bot.split();
-            } else {
-              bot.send(buffers.split(), true);
-            }
-          }
-        }
-        break;
 
   stopBots() {
     if (this.startedBots || !this.stoppedBots) {
