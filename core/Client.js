@@ -3,6 +3,7 @@ import { Minion } from "./Minion.js";
 import { buffers, logger } from "../utils/index.js";
 import { config } from "../config/index.js";
 import { SmartBuffer } from "smart-buffer";
+
 export default class Client {
   ws;
   bots;
@@ -22,12 +23,17 @@ export default class Client {
   botTimeout;
   botInt;
   countInt;
+  port1;
+  port2;
+  port3;
+  port4;
+
   constructor(ws) {
     this.ws = ws;
     this.bots = [];
     this.userX = 0;
     this.userY = 0;
-    this.botAi = false;
+    this.botAi = false; // false = farming, true = follow (o viceversa a seconda della logica)
     this.server = null;
     this.botName = "ȤÊɌØ IS GOD";
     this.botAmount = config.facebookBotSettings.botAmount;
@@ -41,74 +47,99 @@ export default class Client {
     this.botVShield = false;
     this.stoppedBots = true;
     this.startedBots = false;
+    this.port1 = "";
+    this.port2 = "";
+    this.port3 = "";
+    this.port4 = "";
   }
+
   async handleMessage(buffer) {
     const reader = SmartBuffer.fromBuffer(buffer);
     const opcode = reader.readUInt8();
+
     switch (opcode) {
-      case 0:
+      case 0: // START BOTS (Legge Server, Nome, le 4 Porte e la Quantità)
         this.server = reader.readStringNT();
         this.botName = reader.readStringNT();
+        this.port1 = reader.readStringNT();
+        this.port2 = reader.readStringNT();
+        this.port3 = reader.readStringNT();
+        this.port4 = reader.readStringNT();
         this.botAmount = reader.readUInt16LE();
-        // Tetto massimo: se il client chiede più di maxBots, usa maxBots.
+        
         this.botAmount = Math.max(
           1,
-          Math.min(this.botAmount, config.facebookBotSettings.maxBots)
+          Math.min(this.botAmount, config.facebookBotSettings.maxBots || 2000)
         );
         this.startBots();
         break;
-      case 1:
+
+      case 1: // STOP BOTS
         this.stopBots();
         break;
-      case 2:
-        reader.readUInt8() == 1
-          ? (this.botAi = !!reader.readUInt8())
-          : (this.botVShield = !!reader.readUInt8());
+
+      case 2: // SET MODE (Farming / Follow - Inviato dal tasto I o dal menu)
+        {
+          const subType = reader.readUInt8();
+          if (subType === 1) {
+            const modeVal = reader.readUInt8();
+            // 1 = farming, 2 = follow
+            this.botAi = (modeVal === 2);
+          }
+        }
         break;
-      case 3:
-        for (const bot of this.bots)
-          if (
-            bot.ws?.readyState === 1 &&
-            bot.isAlive &&
-            !this.botAi &&
-            bot.isNearMouse &&
-            bot.followMouse
-          )
+
+      case 3: // FEED (Tasto C)
+        for (const bot of this.bots) {
+          if (bot.ws?.readyState === 1 && bot.isAlive) {
             bot.send(buffers.eject(), true);
+          }
+        }
         break;
-      case 4:
-        for (const bot of this.bots)
-          if (
-            bot.ws?.readyState === 1 &&
-            bot.isAlive &&
-            !this.botAi &&
-            bot.isNearMouse &&
-            bot.followMouse
-          )
+
+      case 4: // SPLIT (Tasto Z)
+        for (const bot of this.bots) {
+          if (bot.ws?.readyState === 1 && bot.isAlive) {
             bot.send(buffers.split(), true);
+          }
+        }
         break;
+
+      case 6: // SHIELD / ANTI-VIRUS (Tasto V)
+        // Legge 1 byte booleano (0 o 1)
+        this.botVShield = !!reader.readUInt8();
+        logger.info(`Client Shield Anti-Virus: ${this.botVShield ? "ON" : "OFF"}`);
+        break;
+
+      case 23: // MOUSE POSITION / FOLLOW (Inviato ogni 35ms in modalità Follow)
       case 5:
         this.userX = reader.readInt32LE();
         this.userY = reader.readInt32LE();
+        for (const bot of this.bots) {
+          if (bot.ws?.readyState === 1 && bot.isAlive) {
+            bot.setTarget(this.userX, this.userY);
+          }
+        }
         break;
-      case 6:
-        this.isAlive = !!reader.readUInt8();
-        this.playerName = reader.readStringNT();
-        break;
-      case 7:
+
+      case 7: // AUTO-RECONNECT O CONFIG EXTRA
         this.rQuadrant = reader.readUInt8();
         break;
     }
   }
+
   startBots() {
     if (!this.startedBots) {
       this.stoppedBots = false;
+      this.startedBots = true;
       const maxBots = this.botAmount;
+
       this.botInt = setInterval(() => {
-        if (this.connectedBots < maxBots && this.bots.length < maxBots) {
+        if (this.bots.length < maxBots) {
           this.bots.push(new Minion(this));
         }
       }, 300);
+
       this.countInt = setInterval(() => {
         this.bots = this.bots.filter((bot) => !bot.isClosed);
         const aliveBots = this.bots.filter(
@@ -124,9 +155,11 @@ export default class Client {
           buffers.sendBotCount(`${aliveBots}/${facebookBots}/${maxBots}`)
         );
       }, 300);
-      logger.info(`Client Starting Bots.`);
+
+      logger.info(`Client Starting Bots (${maxBots}) for server: ${this.server}`);
     }
   }
+
   stopBots() {
     if (this.startedBots || !this.stoppedBots) {
       clearInterval(this.botInt);
