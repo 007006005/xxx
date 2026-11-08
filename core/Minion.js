@@ -1,281 +1,194 @@
-// core/Minion.js — Zero The Legend Backend PRO (Target Nickname Follow + Farming Engine)
+// core/Client.js — Zero The Legend Backend PRO (Fixed Default Export)
 import { WebSocket } from "ws";
-import { SmartBuffer } from "smart-buffer";
+import { Minion } from "./Minion.js";
 import { buffers, logger } from "../utils/index.js";
+import { config } from "../config/index.js";
+import { SmartBuffer } from "smart-buffer";
 
-export class Minion {
-  client;
+export default class Client {
   ws;
-  isAlive;
-  isClosed;
-  name;
-  x;
-  y;
-  size;
-  playerCells;
-  viruses;
-  pellets;
-  feedTimer;
-  splitTimer;
+  bots;
   userX;
   userY;
-  offsetX;
-  offsetY;
-  rX;
-  rY;
-  facebookBots;
+  botAi;
+  botName;
+  botAmount;
+  isAlive;
+  rQuadrant;
+  playerName;
+  botVShield;
+  startedBots;
+  stoppedBots;
+  connectedBots;
+  server;
+  botTimeout;
+  botInt;
+  countInt;
+  port1;
+  port2;
+  port3;
+  port4;
+  targetNickname; // Target nickname da seguire
 
-  constructor(client) {
-    this.client = client;
-    this.ws = null;
-    this.isAlive = false;
-    this.isClosed = false;
-    this.name = client.botName;
-    this.x = 0;
-    this.y = 0;
-    this.size = 0;
-    this.playerCells = {};
-    this.viruses = {};
-    this.pellets = {};
-    this.feedTimer = 0;
-    this.splitTimer = 0;
+  constructor(ws) {
+    this.ws = ws;
+    this.bots = [];
     this.userX = 0;
     this.userY = 0;
-    this.offsetX = (Math.random() - 0.5) * 100;
-    this.offsetY = (Math.random() - 0.5) * 100;
-    this.rX = 1;
-    this.rY = 1;
-    this.facebookBots = false;
-
-    this.connect();
+    this.botAi = false;
+    this.server = null;
+    this.botName = "ȤÊɌØ IS GOD";
+    this.botAmount = config.facebookBotSettings?.botAmount || 150;
+    this.rQuadrant = 0;
+    this.botInt = null;
+    this.playerName = "ȤÊɌØ IS GOD";
+    this.countInt = null;
+    this.botTimeout = [];
+    this.isAlive = false;
+    this.connectedBots = 0;
+    this.botVShield = false;
+    this.stoppedBots = true;
+    this.startedBots = false;
+    this.port1 = "";
+    this.port2 = "";
+    this.port3 = "";
+    this.port4 = "";
+    this.targetNickname = "";
   }
 
-  connect() {
-    if (this.isClosed) return;
-    try {
-      this.ws = new WebSocket(this.client.server, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-          "Origin": "https://agar.io"
-        },
-        perMessageDeflate: false
-      });
-      this.ws.binaryType = "arraybuffer";
-      this.ws.onopen = () => this.onOpen();
-      this.ws.onmessage = (event) => this.onMessage(event);
-      this.ws.onerror = () => this.onClose();
-      this.ws.onclose = () => this.onClose();
-    } catch (e) {
-      this.onClose();
-    }
-  }
-
-  onOpen() {
-    if (this.isClosed) return;
-    const writer = new SmartBuffer();
-    writer.writeUInt8(254);
-    writer.writeUInt32LE(6);
-    this.send(writer.toBuffer(), true);
-
-    const writer2 = new SmartBuffer();
-    writer2.writeUInt8(255);
-    writer2.writeUInt32LE(1);
-    this.send(writer2.toBuffer(), true);
-
-    setTimeout(() => {
-      if (this.ws?.readyState === WebSocket.OPEN) {
-        const keyBuf = new SmartBuffer();
-        keyBuf.writeUInt8(80);
-        for (let i = 0; i < 4; i++) keyBuf.writeUInt8(0);
-        this.send(keyBuf.toBuffer(), true);
-
-        const spawnBuf = new SmartBuffer();
-        spawnBuf.writeUInt8(0);
-        spawnBuf.writeStringNT(this.name);
-        this.send(spawnBuf.toBuffer(), true);
-      }
-    }, 300);
-
-    this.facebookBots = true;
-  }
-
-  send(buffer, bypass = false) {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      try {
-        this.ws.send(buffer);
-      } catch (e) {}
-    }
-  }
-
-  onMessage(event) {
-    if (!(event.data instanceof ArrayBuffer)) return;
-    const reader = SmartBuffer.fromBuffer(event.data);
+  async handleMessage(buffer) {
+    const reader = SmartBuffer.fromBuffer(buffer);
     if (reader.remaining() < 1) return;
     const opcode = reader.readUInt8();
 
     switch (opcode) {
-      case 16: // World Update
-        this.parseWorldUpdate(reader);
+      case 0: {
+        this.server = reader.readStringNT();
+        this.botName = reader.readStringNT();
+        this.port1 = reader.readStringNT();
+        this.port2 = reader.readStringNT();
+        this.port3 = reader.readStringNT();
+        this.port4 = reader.readStringNT();
+        this.botAmount = reader.readUInt16LE();
+        
+        this.botAmount = Math.max(
+          1,
+          Math.min(this.botAmount, config.facebookBotSettings?.maxBots || 2000)
+        );
+        this.startBots();
         break;
-      case 64: // Stats / Viewport
-        if (reader.remaining() >= 32) {
-          const minX = reader.readDoubleLE();
-          const minY = reader.readDoubleLE();
-          const maxX = reader.readDoubleLE();
-          const maxY = reader.readDoubleLE();
-          this.rX = (maxX - minX) / 14142;
-          this.rY = (maxY - minY) / 14142;
+      }
+
+      case 1: {
+        this.stopBots();
+        break;
+      }
+
+      case 2: {
+        const subType = reader.readUInt8();
+        if (subType === 1) {
+          const modeVal = reader.readUInt8();
+          this.botAi = (modeVal === 2);
         }
         break;
-    }
-  }
-
-  parseWorldUpdate(reader) {
-    // Rimuove nodi distrutti
-    const removeLen = reader.readUInt16LE();
-    for (let i = 0; i < removeLen; i++) {
-      const id = reader.readUInt32LE();
-      delete this.playerCells[id];
-      delete this.pellets[id];
-      delete this.viruses[id];
-    }
-
-    // Aggiorna/Aggiunge nodi
-    while (true) {
-      const id = reader.readUInt32LE();
-      if (id === 0) break;
-
-      const x = reader.readInt32LE();
-      const y = reader.readInt32LE();
-      const size = reader.readUInt16LE();
-      const colorR = reader.readUInt8();
-      const colorG = reader.readUInt8();
-      const colorB = reader.readUInt8();
-      const flags = reader.readUInt8();
-
-      const isVirus = (flags & 1) !== 0;
-      const isPellet = !isVirus && size < 20;
-
-      let name = "";
-      while (reader.remaining() > 0) {
-        const charCode = reader.readUInt16LE();
-        if (charCode === 0) break;
-        name += String.fromCharCode(charCode);
       }
 
-      const cell = { id, x, y, size, name, color: [colorR, colorG, colorB] };
-
-      if (isPellet) {
-        this.pellets[id] = cell;
-      } else if (isVirus) {
-        this.viruses[id] = cell;
-      } else {
-        this.playerCells[id] = cell;
-      }
-    }
-
-    this.updatePosition();
-  }
-
-  updatePosition() {
-    let sumX = 0, sumY = 0, totalSize = 0, count = 0;
-    for (const cell of Object.values(this.playerCells)) {
-      sumX += cell.x;
-      sumY += cell.y;
-      totalSize += cell.size;
-      count++;
-    }
-
-    if (count > 0) {
-      this.isAlive = true;
-      this.x = sumX / count;
-      this.y = sumY / count;
-      this.size = totalSize / count;
-
-      const target = this.nearestPlayer(this.x, this.y, this.size);
-      const moveBuf = new SmartBuffer();
-      moveBuf.writeUInt8(16);
-      moveBuf.writeInt32LE(Math.round(target.x));
-      moveBuf.writeInt32LE(Math.round(target.y));
-      moveBuf.writeUInt32LE(0);
-      this.send(moveBuf.toBuffer());
-    } else {
-      this.isAlive = false;
-      // Respawn automatico se morto
-      if (Math.random() < 0.1) {
-        const spawnBuf = new SmartBuffer();
-        spawnBuf.writeUInt8(0);
-        spawnBuf.writeStringNT(this.name);
-        this.send(spawnBuf.toBuffer(), true);
-      }
-    }
-  }
-
-  nearestPlayer(x, y, size) {
-    const maxDistance = 2000;
-    
-    // Gestione Follow per Nickname o coordinate del mouse
-    let targetX = this.client.userX / this.rX;
-    let targetY = this.client.userY / this.rY;
-    const followByName = this.client.targetNickname; // Target impostato dal client
-
-    if (followByName && followByName.trim() !== "") {
-      const searchName = followByName.trim().toLowerCase();
-      for (const cell of Object.values(this.playerCells)) {
-        if (cell.name && cell.name.toLowerCase().includes(searchName)) {
-          targetX = cell.x;
-          targetY = cell.y;
-          break;
+      case 3: { // FEED (Tasto C)
+        logger.info(`[SERVER] Comando FEED (Opcode 3)`);
+        for (const bot of this.bots) {
+          if (bot.ws?.readyState === 1 && bot.isAlive) {
+            if (typeof bot.eject === "function") bot.eject();
+            else bot.send(buffers.eject(), true);
+          }
         }
+        break;
       }
-    }
 
-    // Se siamo in modalità Farming e non seguiamo un player specifico, cerca il pellet più vicino
-    if (!followByName && !this.client.botAi) {
-      let closestPellet = null;
-      let minDst = Infinity;
-      for (const p of Object.values(this.pellets)) {
-        const dst = Math.hypot(p.x - x, p.y - y);
-        if (dst < minDst && dst < 800) {
-          minDst = dst;
-          closestPellet = p;
+      case 4: { // SPLIT (Tasto Z)
+        logger.info(`[SERVER] Comando SPLIT (Opcode 4)`);
+        for (const bot of this.bots) {
+          if (bot.ws?.readyState === 1 && bot.isAlive) {
+            if (typeof bot.split === "function") bot.split();
+            else bot.send(buffers.split(), true);
+          }
         }
+        break;
       }
-      if (closestPellet) {
-        targetX = closestPellet.x;
-        targetY = closestPellet.y;
+
+      case 5:
+      case 23: {
+        this.userX = reader.readInt32LE();
+        this.userY = reader.readInt32LE();
+        for (const bot of this.bots) {
+          bot.userX = this.userX;
+          bot.userY = this.userY;
+        }
+        break;
+      }
+
+      case 6: {
+        this.botVShield = !!reader.readUInt8();
+        logger.info(`Client Shield Anti-Virus: ${this.botVShield ? "ON" : "OFF"}`);
+        break;
+      }
+
+      case 7: {
+        if (reader.remaining() >= 1) {
+          this.rQuadrant = reader.readUInt8();
+        }
+        break;
       }
     }
-
-    const dx = targetX - x;
-    const dy = targetY - y;
-    const dist = 1 + Math.hypot(dx, dy);
-
-    return {
-      x: x + (dx / dist) * maxDistance,
-      y: y + (dy / dist) * maxDistance
-    };
   }
 
-  split() {
-    const buf = new Uint8Array([17]);
-    this.send(buf, true);
+  startBots() {
+    if (!this.startedBots) {
+      this.stoppedBots = false;
+      this.startedBots = true;
+      const maxBots = this.botAmount;
+
+      this.botInt = setInterval(() => {
+        if (this.bots.length < maxBots && !this.stoppedBots) {
+          this.bots.push(new Minion(this));
+        }
+      }, 300);
+
+      this.countInt = setInterval(() => {
+        this.bots = this.bots.filter((bot) => !bot.isClosed);
+        const aliveBots = this.bots.filter(
+          (bot) => bot.ws?.readyState === WebSocket.OPEN && bot.isAlive
+        ).length;
+        const facebookBots = this.bots.filter(
+          (bot) =>
+            bot.ws?.readyState === WebSocket.OPEN &&
+            bot.isAlive &&
+            bot.facebookBots
+        ).length;
+        this.ws?.send(
+          buffers.sendBotCount(`${aliveBots}/${facebookBots}/${maxBots}`)
+        );
+      }, 300);
+
+      logger.info(`Client Starting Bots (${maxBots}) for server: ${this.server}`);
+    }
   }
 
-  eject() {
-    const buf = new Uint8Array([21]);
-    this.send(buf, true);
-  }
-
-  stop() {
-    this.isClosed = true;
-    try {
-      this.ws?.close();
-    } catch (e) {}
-  }
-
-  onClose() {
-    this.isAlive = false;
-    this.isClosed = true;
+  stopBots() {
+    if (this.startedBots || !this.stoppedBots) {
+      clearInterval(this.botInt);
+      clearInterval(this.countInt);
+      this.botTimeout.forEach((id) => clearTimeout(id));
+      this.bots.forEach((bot) => bot.stop());
+      this.botInt = null;
+      this.countInt = null;
+      this.bots.length = 0;
+      this.stoppedBots = true;
+      this.startedBots = false;
+      this.botTimeout.length = 0;
+      try {
+        this.ws?.send(Buffer.from([1]));
+      } catch (e) {}
+      logger.warn(`Client Bots Stopped!`);
+    }
   }
 }
