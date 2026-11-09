@@ -1,5 +1,4 @@
 import express from 'express';
-import cors from 'cors';
 
 const router = express.Router();
 
@@ -15,7 +14,6 @@ let botConfig = {
     isRunning: false
 };
 
-// Simula la creazione di un bot
 function createBot(idx) {
     return {
         id: idx,
@@ -28,8 +26,7 @@ function createBot(idx) {
     };
 }
 
-// Gestisce la sincronizzazione dei bot
-router.post('/api/sync', (req, res) => {
+router.post('/sync', (req, res) => {
     try {
         const { action, botCount, botName, agarServer, ports, spawnPointActive, spawnPointX, spawnPointY } = req.body;
 
@@ -71,8 +68,7 @@ router.post('/api/sync', (req, res) => {
     }
 });
 
-// Endpoint per ricevere lo stato sincronizzato
-router.get('/api/status', (req, res) => {
+router.get('/status', (req, res) => {
     res.json({
         isRunning: botConfig.isRunning,
         botCount: bots.length,
@@ -84,4 +80,4 @@ router.get('/api/status', (req, res) => {
     });
 });
 
-module.exports = router;
+export default router;
