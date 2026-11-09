@@ -94,7 +94,7 @@ helper.getProxy = function getProxy() {
 
 // ═══ WebSocket Server ═══
 wss.on('connection', (ws) => {
-  const maxC = config.serverSettings.maxClients || 500;
+  const maxC = config.serverSettings.maxClients || 5000;
   if (globalStats.connectedClients >= maxC) {
     logger.warn(`Max clients (${maxC}) reached, rejecting connection`);
     ws.close(1013, 'Server full');
@@ -191,7 +191,7 @@ const gracefulShutdown = (signal) => {
       process.exit(0);
     });
   });
-  setTimeout(() => process.exit(1), 10000);
+  setTimeout(() => process.exit(1), 8000);
 };
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
