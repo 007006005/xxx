@@ -57,7 +57,7 @@ export default class Client {
             this.userY = reader.readInt32LE();
           }
           break;
-        case 0: // Eventuale comando di spawn o configurazione bot
+        case 0:
           break;
         default:
           break;
@@ -101,7 +101,6 @@ class MinionInstance {
     this.rX = 1;
     this.rY = 1;
     this.targetNickname = client.targetNickname;
-    this.botAi = client.botAi;
 
     this.connect();
   }
@@ -223,6 +222,22 @@ class MinionInstance {
     this.updatePosition();
   }
 
+  // Trova il pellet (cibo) più vicino alla cella del bot per il Farming
+  nearestPellet(x, y) {
+    let nearest = null;
+    let minDist = Infinity;
+    for (const pellet of Object.values(this.pellets)) {
+      const dx = pellet.x - x;
+      const dy = pellet.y - y;
+      const dist = dx * dx + dy * dy;
+      if (dist < minDist) {
+        minDist = dist;
+        nearest = pellet;
+      }
+    }
+    return nearest;
+  }
+
   updatePosition() {
     let sumX = 0, sumY = 0, totalSize = 0, count = 0;
     for (const cell of Object.values(this.playerCells)) {
@@ -238,37 +253,50 @@ class MinionInstance {
       this.y = sumY / count;
       this.size = totalSize / count;
 
-      const target = this.nearestPlayer(this.x, this.y);
+      let targetX, targetY;
+
+      // 🤖 SE L'AI (FARMING) È ATTIVA: Cerca e punta il cibo (pellet) più vicino
+      if (this.client.botAi) {
+        const nearestP = this.nearestPellet(this.x, this.y);
+        if (nearestP) {
+          targetX = nearestP.x;
+          targetY = nearestP.y;
+        } else {
+          // Fallback: se non vede cibo vicino, segue il mouse del giocatore
+          targetX = this.client.userX || this.x;
+          targetY = this.client.userY || this.y;
+        }
+      } else {
+        // 🎮 MODALITÀ FOLLOW: Segue le coordinate del mouse del giocatore
+        const maxDistance = 2000;
+        let mouseX = this.client.userX || this.x;
+        let mouseY = this.client.userY || this.y;
+        
+        const dx = mouseX - this.x;
+        const dy = mouseY - this.y;
+        const dist = 1 + Math.hypot(dx, dy);
+
+        targetX = this.x + (dx / dist) * maxDistance;
+        targetY = this.y + (dy / dist) * maxDistance;
+      }
+
+      // Invia il pacchetto di movimento (Opcode 16) al server di gioco
       const moveBuf = new SmartBuffer();
       moveBuf.writeUInt8(16);
-      moveBuf.writeInt32LE(Math.round(target.x));
-      moveBuf.writeInt32LE(Math.round(target.y));
+      moveBuf.writeInt32LE(Math.round(targetX));
+      moveBuf.writeInt32LE(Math.round(targetY));
       moveBuf.writeUInt32LE(0);
       this.send(moveBuf.toBuffer());
     } else {
       this.isAlive = false;
-      if (Math.random() < 0.1) {
+      // Tenta il respawn automatico se il bot è morto
+      if (Math.random() < 0.2) {
         const spawnBuf = new SmartBuffer();
         spawnBuf.writeUInt8(0);
         spawnBuf.writeStringNT(this.name);
         this.send(spawnBuf.toBuffer());
       }
     }
-  }
-
-  nearestPlayer(x, y) {
-    const maxDistance = 2000;
-    let targetX = this.client.userX || 0;
-    let targetY = this.client.userY || 0;
-    
-    const dx = targetX - x;
-    const dy = targetY - y;
-    const dist = 1 + Math.hypot(dx, dy);
-
-    return {
-      x: x + (dx / dist) * maxDistance,
-      y: y + (dy / dist) * maxDistance
-    };
   }
 
   stop() {
