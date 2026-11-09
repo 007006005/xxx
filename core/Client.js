@@ -149,7 +149,7 @@ class MinionInstance {
         spawnBuf.writeStringNT(this.name);
         this.send(spawnBuf.toBuffer(), true);
       }
-    }, 300);
+    }, 50);
   }
 
   send(buffer) {
