@@ -58,6 +58,43 @@ server.on('request', (req, res) => {
     res.end();
     return;
   }
+// server.js (modifica la sezione HTTP handler)
+server.on('request', (req, res) => {
+    // Configurazione CORS per permettere le chiamate dal gioco/Tampermonkey
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    if (req.method === 'OPTIONS') {
+        res.writeHead(204);
+        res.end();
+        return;
+    }
+
+    // Health check essenziale per mantenere attivo il servizio su Render
+    if (req.url === '/' || req.url === '/health') {
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end('ZeroTheLegend Backend OK');
+        return;
+    }
+
+    // Inserisci qui il nuovo modulo
+    if (req.url.startsWith('/api/sync') || req.url.startsWith('/api/status')) {
+        const botManager = require('./botManager');
+        req.url = req.url.replace(/^\/api\//, '');
+        botManager(req, res, () => {});
+        return;
+    }
+
+    // Endpoint API Config / Stato sincronizzato con il pannello script
+    if (req.url.startsWith('/api/config')) {
+        // ... (il tuo codice esistente)
+    }
+
+    // ... (resto del codice esistente)
+    res.writeHead(404);
+    res.end();
+});
 
   // Health check essenziale per mantenere attivo il servizio su Render
   if (req.url === '/' || req.url === '/health') {
