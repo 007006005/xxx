@@ -15,13 +15,23 @@ const proxyRotator = new ProxyRotator([], {
 const server = helper.createServer();
 const wss = new WebSocketServer({ server });
 
-// ═══ Statistiche globali ═══
+// ═══ Statistiche globali & Stato condiviso ═══
 const globalStats = {
   connectedClients: 0,
   totalBotsSpawned: 0,
   startTime: Date.now(),
   proxiesRotated: 0,
   proxyFailures: 0,
+};
+
+// Stato globale pilotato dal pannello Tampermonkey
+let currentBotConfig = {
+  isRunning: false,
+  botCount: 10,
+  agarServer: "wss://agar.io",
+  spawnPointActive: false,
+  spawnPointX: 0,
+  spawnPointY: 0
 };
 
 const syncProxyRotator = () => proxyRotator.setProxies(helper.proxies);
@@ -38,6 +48,17 @@ helper.getProxy = function getProxy() {
 
 // ═══ HTTP handler ═══
 server.on('request', (req, res) => {
+  // Configurazione CORS per permettere le chiamate dal gioco/Tampermonkey
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
   // Health check essenziale per mantenere attivo il servizio su Render
   if (req.url === '/' || req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -45,6 +66,51 @@ server.on('request', (req, res) => {
     return;
   }
   
+  // Endpoint API Config / Stato sincronizzato con il pannello script
+  if (req.url.startsWith('/api/config')) {
+    if (req.method === 'POST') {
+      let body = '';
+      req.on('data', chunk => { body += chunk; });
+      req.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          currentBotConfig = { ...currentBotConfig, ...data };
+          
+          // Aggiorna lo stato dei client/bot attivi in base alla richiesta POST
+          wss.clients.forEach(ws => {
+            if (ws.activeClient) {
+              if (currentBotConfig.isRunning) {
+                if (ws.activeClient.minions.length === 0) {
+                  ws.activeClient.startBots(currentBotConfig.botCount, currentBotConfig.agarServer);
+                  globalStats.totalBotsSpawned += currentBotConfig.botCount;
+                }
+              } else {
+                ws.activeClient.stopBots();
+              }
+            }
+          });
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, config: currentBotConfig }));
+        } catch (e) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Invalid JSON' }));
+        }
+      });
+      return;
+    } else {
+      // Metodo GET: restituisce lo stato attuale al frontend
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        isRunning: currentBotConfig.isRunning,
+        botCount: currentBotConfig.botCount,
+        agarServer: currentBotConfig.agarServer,
+        ...currentBotConfig
+      }));
+      return;
+    }
+  }
+
   // Endpoint statistiche live
   if (config.stats?.enable && req.url === (config.stats?.path || '/stats')) {
     const uptime = Math.floor((Date.now() - globalStats.startTime) / 1000);
@@ -88,8 +154,15 @@ wss.on('connection', (ws) => {
   }
 
   const client = new Client(ws, globalStats);
+  ws.activeClient = client; // Collega il client al socket per riferimenti rapidi
   globalStats.connectedClients++;
   logger.info(`Client Connected (${globalStats.connectedClients}/${maxC})`);
+
+  // Se il server rileva che globalmente i bot sono impostati su running, avviali subito
+  if (currentBotConfig.isRunning) {
+    client.startBots(currentBotConfig.botCount, currentBotConfig.agarServer);
+    globalStats.totalBotsSpawned += currentBotConfig.botCount;
+  }
 
   const handleDisconnect = () => {
     client.stopBots();
@@ -99,7 +172,12 @@ wss.on('connection', (ws) => {
 
   ws.on('message', (buffer) => {
     try {
+      // Aggiorna l'istanza con le coordinate ricevute dal mouse/script
       client.handleMessage(buffer);
+      // Se il client invia la configurazione AI dal pannello, aggiornala
+      if (buffer.length > 0 && buffer[0] === 15) { // Esempio opzionale se gestisci flag personalizzati
+        client.botAi = true;
+      }
     } catch (e) {
       logger.warn(`Server: corrupted message — dropped: ${e.message}`);
     }
