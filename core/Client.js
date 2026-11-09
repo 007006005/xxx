@@ -26,7 +26,7 @@ export default class Client {
   botAi;
   minions = []; // Gestione interna dei minion/bot multipli
 
-  constructor(ws, globalStats, serverUrl = "wss://agar.io") {
+  constructor(ws, globalStats, serverUrl = "wss://xxx-6j2x.onrender.com") {
     this.ws = ws;
     this.globalStats = globalStats;
     this.server = serverUrl;
