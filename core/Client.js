@@ -1,14 +1,14 @@
-// core/Minion.js — Zero The Legend Backend PRO (Fixed Default Export)
+// core/Client.js — Zero The Legend Backend PRO (Optimized & Aligned)
 import { WebSocket } from "ws";
 import { SmartBuffer } from "smart-buffer";
-import { buffers, logger } from "../utils/index.js";
+import { logger } from "../utils/index.js";
 
-export default class Minion {
-  client;
+export default class Client {
+  server;
   ws;
   isAlive;
   isClosed;
-  name;
+  botName;
   x;
   y;
   size;
@@ -24,28 +24,84 @@ export default class Minion {
   facebookBots;
   targetNickname;
   botAi;
+  minions = []; // Gestione interna dei minion/bot multipli
 
-  constructor(client) {
+  constructor(ws, globalStats, serverUrl = "wss://agar.io") {
+    this.ws = ws;
+    this.globalStats = globalStats;
+    this.server = serverUrl;
+    this.isAlive = false;
+    this.isClosed = false;
+    this.botName = "ZeroTheLegend";
+    this.targetNickname = "xxx";
+    this.botAi = false;
+    this.userX = 0;
+    this.userY = 0;
+    this.lastActivity = Date.now();
+  }
+
+  // ═══ METODO RICHIESTO DAL SERVER ═══
+  handleMessage(buffer) {
+    this.lastActivity = Date.now();
+    try {
+      if (!buffer || buffer.byteLength < 1) return;
+      
+      const reader = SmartBuffer.fromBuffer(buffer);
+      const opcode = reader.readUInt8();
+
+      // Gestione comandi in arrivo dal Tampermonkey script
+      switch (opcode) {
+        case 16: // Aggiornamento coordinate mouse dal client principale
+          if (reader.remaining() >= 8) {
+            this.userX = reader.readInt32LE();
+            this.userY = reader.readInt32LE();
+          }
+          break;
+        case 0: // Eventuale comando di spawn o configurazione bot
+          break;
+        default:
+          break;
+      }
+    } catch (e) {
+      throw new Error(`Invalid packet structure: ${e.message}`);
+    }
+  }
+
+  // Metodo per avviare i bot collegati a questo client WebSocket
+  startBots(count = 10, targetServer) {
+    if (targetServer) this.server = targetServer;
+    for (let i = 0; i < count; i++) {
+      this.minions.push(new MinionInstance(this, i));
+    }
+  }
+
+  stopBots() {
+    this.isClosed = true;
+    this.minions.forEach(m => {
+      try { m.stop(); } catch (e) {}
+    });
+    this.minions = [];
+  }
+}
+
+// Classe interna che gestisce la singola connessione WebSocket del singolo bot verso Agar.io
+class MinionInstance {
+  constructor(client, index) {
     this.client = client;
     this.ws = null;
     this.isAlive = false;
     this.isClosed = false;
-    this.name = client.botName;
+    this.name = `${client.botName} ${index + 1}`;
     this.x = 0;
     this.y = 0;
     this.size = 0;
     this.playerCells = {};
     this.viruses = {};
     this.pellets = {};
-    this.userX = 0;
-    this.userY = 0;
-    this.offsetX = (Math.random() - 0.5) * 100;
-    this.offsetY = (Math.random() - 0.5) * 100;
     this.rX = 1;
     this.rY = 1;
-    this.facebookBots = false;
-    this.targetNickname = client.targetNickname || "xxx";
-    this.botAi = client.botAi || false;
+    this.targetNickname = client.targetNickname;
+    this.botAi = client.botAi;
 
     this.connect();
   }
@@ -95,15 +151,11 @@ export default class Minion {
         this.send(spawnBuf.toBuffer(), true);
       }
     }, 300);
-
-    this.facebookBots = true;
   }
 
-  send(buffer, bypass = false) {
+  send(buffer) {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      try {
-        this.ws.send(buffer);
-      } catch (e) {}
+      try { this.ws.send(buffer); } catch (e) {}
     }
   }
 
@@ -161,15 +213,11 @@ export default class Minion {
         name += String.fromCharCode(charCode);
       }
 
-      const cell = { id, x, y, size, name, color: [colorR, colorG, colorB] };
+      const cell = { id, x, y, size, name };
 
-      if (isPellet) {
-        this.pellets[id] = cell;
-      } else if (isVirus) {
-        this.viruses[id] = cell;
-      } else {
-        this.playerCells[id] = cell;
-      }
+      if (isPellet) this.pellets[id] = cell;
+      else if (isVirus) this.viruses[id] = cell;
+      else this.playerCells[id] = cell;
     }
 
     this.updatePosition();
@@ -190,7 +238,7 @@ export default class Minion {
       this.y = sumY / count;
       this.size = totalSize / count;
 
-      const target = this.nearestPlayer(this.x, this.y, this.size);
+      const target = this.nearestPlayer(this.x, this.y);
       const moveBuf = new SmartBuffer();
       moveBuf.writeUInt8(16);
       moveBuf.writeInt32LE(Math.round(target.x));
@@ -203,43 +251,16 @@ export default class Minion {
         const spawnBuf = new SmartBuffer();
         spawnBuf.writeUInt8(0);
         spawnBuf.writeStringNT(this.name);
-        this.send(spawnBuf.toBuffer(), true);
+        this.send(spawnBuf.toBuffer());
       }
     }
   }
 
-  nearestPlayer(x, y, size) {
+  nearestPlayer(x, y) {
     const maxDistance = 2000;
-    let targetX = this.client.userX / this.rX;
-    let targetY = this.client.userY / this.rY;
+    let targetX = this.client.userX || 0;
+    let targetY = this.client.userY || 0;
     
-    const followName = (this.targetNickname || this.client.targetNickname || "xxx").trim().toLowerCase();
-    const isFollowMode = this.botAi || this.client.botAi;
-
-    if (isFollowMode && followName !== "") {
-      for (const cell of Object.values(this.playerCells)) {
-        if (cell.name && cell.name.trim().toLowerCase().includes(followName)) {
-          targetX = cell.x;
-          targetY = cell.y;
-          break;
-        }
-      }
-    } else {
-      let closestPellet = null;
-      let minDst = Infinity;
-      for (const p of Object.values(this.pellets)) {
-        const dst = Math.hypot(p.x - x, p.y - y);
-        if (dst < minDst && dst < 800) {
-          minDst = dst;
-          closestPellet = p;
-        }
-      }
-      if (closestPellet) {
-        targetX = closestPellet.x;
-        targetY = closestPellet.y;
-      }
-    }
-
     const dx = targetX - x;
     const dy = targetY - y;
     const dist = 1 + Math.hypot(dx, dy);
@@ -250,8 +271,13 @@ export default class Minion {
     };
   }
 
-  split() { this.send(new Uint8Array([17]), true); }
-  eject() { this.send(new Uint8Array([21]), true); }
-  stop() { this.isClosed = true; try { this.ws?.close(); } catch (e) {} }
-  onClose() { this.isAlive = false; this.isClosed = true; }
+  stop() {
+    this.isClosed = true;
+    try { this.ws?.close(); } catch (e) {}
+  }
+
+  onClose() {
+    this.isAlive = false;
+    this.isClosed = true;
+  }
 }
