@@ -15,6 +15,7 @@
     "cors": "^2.8.5",
     "express": "^4.18.2",
     "https-proxy-agent": "^7.0.5",
+    "mysql2": "^3.24.6",
     "p-queue": "^8.0.1",
     "proxy": "^4.1.0",
     "smart-buffer": "^4.2.0",
