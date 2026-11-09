@@ -1,4 +1,4 @@
-// server.js — Zero The Legend Backend PRO (Complete & Optimized for Render)
+// server.js — Zero The Legend Backend PRO (Complete & Optimized for Render with License Verification)
 import express from 'express';
 import cors from 'cors';
 import { WebSocketServer } from 'ws';
@@ -10,11 +10,40 @@ import { fetchProxies } from './scripts/fetchProxies.js';
 import ProxyRotator from './core/ProxyRotator.js';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import botManagerRouter from './botManager.js';
+import mysql from 'mysql2/promise';
 
 const manager = new TokenManager();
 const proxyRotator = new ProxyRotator([], {
   retryTimeout: config.proxySettings?.retryTimeout ?? 60 * 1000,
 });
+
+// ═══ Connessione Database per Verifica Licenze ═══
+const dbPool = mysql.createPool({
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || '',
+  database: process.env.DB_NAME || 'master_portal',
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
+});
+
+async function validateLicenseKey(licenseKey) {
+  if (!licenseKey) return { valid: false, reason: "Chiave licenza mancante" };
+  try {
+    const [rows] = await dbPool.query(
+      "SELECT * FROM licenses WHERE license_key = ? AND is_active = 1 AND (expire_date IS NULL OR expire_date > NOW())",
+      [licenseKey]
+    );
+    if (rows.length === 0) {
+      return { valid: false, reason: "Licenza non valida o scaduta" };
+    }
+    return { valid: true, data: rows[0] };
+  } catch (err) {
+    logger.error(`[DB Error] Errore verifica licenza: ${err.message}`);
+    return { valid: false, reason: "Errore interno server database" };
+  }
+}
 
 // ═══ Express App & HTTP Server ═══
 const app = express();
@@ -24,6 +53,21 @@ app.use(express.json());
 
 // Registrazione rotte API
 app.use('/api', botManagerRouter);
+
+// ═══ Endpoint di Verifica Licenza ═══
+app.post('/api/verify-license', async (req, res) => {
+  const { licenseKey } = req.body;
+  const result = await validateLicenseKey(licenseKey);
+  if (!result.valid) {
+    return res.status(401).json({ valid: false, message: result.reason });
+  }
+  return res.json({
+    valid: true,
+    licenseKey: result.data.license_key,
+    expireDate: result.data.expire_date,
+    maxBots: result.data.max_bots || 200
+  });
+});
 
 // Health check essenziale per Render
 app.get(['/', '/health'], (req, res) => {
@@ -197,4 +241,4 @@ const gracefulShutdown = (signal) => {
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-export { manager, globalStats, proxyRotator };
+export { manager, globalStats, proxyRotator, dbPool, validateLicenseKey };
