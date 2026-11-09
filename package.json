@@ -8,8 +8,10 @@
   "scripts": {
     "start": "node server.js"
   },
-  
-"dependencies": {
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "ws": "^8.13.0",
     "api": "^6.1.3",
     "boxen": "^8.0.0",
     "chalk": "^5.4.0",
@@ -17,10 +19,6 @@
     "p-queue": "^8.0.1",
     "proxy": "^4.1.0",
     "smart-buffer": "^4.2.0",
-    "token": "^0.1.0",
-    "ws": "^8.21.3",
-    "express": "^4.18.2",
-    "cors": "^2.8.5"
-
+    "token": "^0.1.0"
   }
 }
