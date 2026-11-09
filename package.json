@@ -8,18 +8,11 @@
   "scripts": {
     "start": "node server.js"
   },
-  {
-  "name": "zero-legend",
-  "version": "5.5",
-  "type": "module",
+  
   "dependencies": {
-    "express": "^4.18.2",
+        "express": "^4.18.2",
     "cors": "^2.8.5",
     "ws": "^8.13.0"
-  }
-}
-,
-  "dependencies": {
     "api": "^6.1.3",
     "boxen": "^8.0.0",
     "chalk": "^5.4.0",
