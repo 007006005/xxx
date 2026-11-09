@@ -1,6 +1,5 @@
-// botManager.js
-const express = require('express');
-const cors = require('cors');
+import express from 'express';
+import cors from 'cors';
 
 const router = express.Router();
 
