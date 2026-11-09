@@ -268,7 +268,7 @@ class MinionInstance {
         }
       } else {
         // 🎮 MODALITÀ FOLLOW: Segue le coordinate del mouse del giocatore
-        const maxDistance = 2000;
+        const maxDistance = 500;
         let mouseX = this.client.userX || this.x;
         let mouseY = this.client.userY || this.y;
         
