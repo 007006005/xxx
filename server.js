@@ -1,4 +1,4 @@
-// server.js — Zero The Legend Backend PRO (Complete & Optimized for Render with Global Coordinates)
+// server.js — Zero The Legend Backend PRO (Complete & Optimized for Render)
 import { config } from './config/index.js';
 import Client from './core/Client.js';
 import { helper, logger } from "./utils/index.js";
@@ -99,26 +99,6 @@ wss.on('connection', (ws) => {
 
   ws.on('message', (buffer) => {
     try {
-      // ═══ Intercettazione ed estrazione coordinate globali (Binario) ═══
-      if (Buffer.isBuffer(buffer) && buffer.length >= 9) {
-        const reader = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-        const packetType = reader.getUint8(0);
-
-        // Tipo 1: Pacchetto di aggiornamento coordinate globali (X, Y)
-        if (packetType === 1) {
-          const targetX = reader.getFloat32(1, true); // Little-endian
-          const targetY = reader.getFloat32(5, true); // Little-endian
-
-          // Assegnazione delle coordinate al client e propagazione ai bot
-          client.targetX = targetX;
-          client.targetY = targetY;
-
-          if (typeof client.updateTarget === 'function') {
-            client.updateTarget(targetX, targetY);
-          }
-        }
-      }
-
       client.handleMessage(buffer);
     } catch (e) {
       logger.warn(`Server: corrupted message — dropped: ${e.message}`);
