@@ -1,3 +1,4 @@
+// server.js — Zero The Legend Backend PRO (Complete & Optimized for Render)
 import express from 'express';
 import cors from 'cors';
 import { WebSocketServer } from 'ws';
@@ -8,16 +9,68 @@ import TokenManager from './core/TokenManager.js';
 import { fetchProxies } from './scripts/fetchProxies.js';
 import ProxyRotator from './core/ProxyRotator.js';
 import { HttpsProxyAgent } from 'https-proxy-agent';
+import botManagerRouter from './botManager.js';
 
-// Inizializza le variabili
 const manager = new TokenManager();
 const proxyRotator = new ProxyRotator([], {
   retryTimeout: config.proxySettings?.retryTimeout ?? 60 * 1000,
 });
-const server = helper.createServer();
+
+// ═══ Express App & HTTP Server ═══
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+
+// Registrazione rotte API
+app.use('/api', botManagerRouter);
+
+// Health check essenziale per Render
+app.get(['/', '/health'], (req, res) => {
+  res.type('text/plain').send('ZeroTheLegend Backend OK');
+});
+
+// Statistiche live
+if (config.stats?.enable) {
+  app.get(config.stats?.path || '/stats', (req, res) => {
+    const uptime = Math.floor((Date.now() - globalStats.startTime) / 1000);
+    res.json({
+      version: '9.9.0',
+      uptime,
+      connectedClients: globalStats.connectedClients,
+      totalBotsSpawned: globalStats.totalBotsSpawned,
+      validTokens: manager.vt?.length ?? 0,
+      proxies: helper.proxies.length,
+    });
+  });
+}
+
+// Statistiche proxy
+app.get('/proxy-stats', (req, res) => {
+  res.json({
+    enabled: !!config.proxySettings.enableProxy,
+    proxiesRotated: globalStats.proxiesRotated,
+    proxyFailures: globalStats.proxyFailures,
+    ...proxyRotator.getStats(),
+  });
+});
+
+const port = process.env.PORT || config.serverSettings.port || 3000;
+const server = app.listen(port, () => {
+  logger.info(`Server started on port ${port} with ${helper.proxies.length} proxies`);
+});
+
 const wss = new WebSocketServer({ server });
 
-// Stato globale pilotato dal pannello Tampermonkey
+// ═══ Statistiche globali & Stato condiviso ═══
+const globalStats = {
+  connectedClients: 0,
+  totalBotsSpawned: 0,
+  startTime: Date.now(),
+  proxiesRotated: 0,
+  proxyFailures: 0,
+};
+
 let currentBotConfig = {
   isRunning: false,
   botCount: 10,
@@ -27,97 +80,121 @@ let currentBotConfig = {
   spawnPointY: 0
 };
 
-// Configurazione Express
-const app = express();
-app.use(cors());
-app.use(express.json());
+const syncProxyRotator = () => proxyRotator.setProxies(helper.proxies);
 
-// Inserisci il router del botManager
-app.use('/api', require('./botManager'));
+helper.getProxy = function getProxy() {
+  if (!config.proxySettings.enableProxy) return undefined;
+  const proxy = proxyRotator.getNextProxy();
+  if (!proxy) return undefined;
+  globalStats.proxiesRotated++;
+  const agent = new HttpsProxyAgent(`${config.proxySettings.protocol}://${proxy}`);
+  agent.proxyAddress = proxy;
+  return agent;
+};
 
-// Avvia il server Express
-const httpServer = app.listen(process.env.PORT || config.serverSettings.port, () => {
-  logger.info(`Server running on port ${process.env.PORT || config.serverSettings.port}`);
-});
+// ═══ WebSocket Server ═══
+wss.on('connection', (ws) => {
+  const maxC = config.serverSettings.maxClients || 500;
+  if (globalStats.connectedClients >= maxC) {
+    logger.warn(`Max clients (${maxC}) reached, rejecting connection`);
+    ws.close(1013, 'Server full');
+    return;
+  }
 
-app.use(cors());
-app.use(express.json());
+  const client = new Client(ws, globalStats);
+  ws.activeClient = client;
+  globalStats.connectedClients++;
+  logger.info(`Client Connected (${globalStats.connectedClients}/${maxC})`);
 
-// Lista dei bot gestiti dal server
-let bots = [];
-let botCount = 10;
-let botNames = ["Zero The Legend", "Zero Extens", "Master CNC", "XEVBOTS"];
-let agarServer = "wss://agar.io";
-let ports = ["", "", "", ""];
-let spawnPointActive = false;
-let spawnPointX = 0;
-let spawnPointY = 0;
+  if (currentBotConfig.isRunning) {
+    client.startBots(currentBotConfig.botCount, currentBotConfig.agarServer);
+    globalStats.totalBotsSpawned += currentBotConfig.botCount;
+  }
 
-// Simula la creazione di un bot
-function createBot(idx) {
-    return {
-        id: idx,
-        name: botNames[idx % botNames.length],
-        port: ports[idx % ports.length],
-        spawnPointActive: spawnPointActive,
-        spawnPointX: spawnPointX,
-        spawnPointY: spawnPointY,
-        isAlive: false
-    };
-}
+  const handleDisconnect = () => {
+    client.stopBots();
+    globalStats.connectedClients = Math.max(0, globalStats.connectedClients - 1);
+    logger.warn('Client Disconnected!');
+  };
 
-// Gestisce la sincronizzazione dei bot
-router.post('/api/sync', (req, res) => {
+  ws.on('message', (buffer) => {
     try {
-        const { action, botCount, botName, agarServer, ports, spawnPointActive, spawnPointX, spawnPointY } = req.body;
-
-        if (action === "start") {
-            botCount = botCount || botConfig.botCount;
-            bots = Array(botCount).fill().map((_, idx) => createBot(idx));
-            res.json({ success: true, message: "Bot avviati", bots: bots.length });
-        } else if (action === "stop") {
-            bots = [];
-            res.json({ success: true, message: "Bot fermati" });
-        } else if (action === "sync_bots") {
-            botCount = botCount || botConfig.botCount;
-            botNames = botName ? botName.split(", ").filter(name => name) : botConfig.botNames;
-            agarServer = agarServer || botConfig.agarServer;
-            ports = ports || botConfig.ports;
-            spawnPointActive = spawnPointActive !== undefined ? spawnPointActive : botConfig.spawnPointActive;
-            spawnPointX = spawnPointX !== undefined ? parseFloat(spawnPointX) : botConfig.spawnPointX;
-            spawnPointY = spawnPointY !== undefined ? parseFloat(spawnPointY) : botConfig.spawnPointY;
-
-            bots = Array(botCount).fill().map((_, idx) => createBot(idx));
-            res.json({
-                success: true,
-                botCount: bots.length,
-                botNames: botNames,
-                agarServer: agarServer,
-                ports: ports,
-                spawnPointActive: spawnPointActive,
-                spawnPointX: spawnPointX,
-                spawnPointY: spawnPointY
-            });
-        } else {
-            res.status(400).json({ error: "Azione non valida" });
-        }
+      client.handleMessage(buffer);
+      if (buffer.length > 0 && buffer[0] === 15) {
+        client.botAi = true;
+      }
     } catch (e) {
-        console.error("Errore nel gestire la richiesta:", e);
-        res.status(400).json({ error: "Errore interno del server" });
+      logger.warn(`Server: corrupted message — dropped: ${e.message}`);
     }
+  });
+
+  ws.on('close', handleDisconnect);
+  ws.on('error', handleDisconnect);
+
+  const heartbeatMs = config.serverSettings.heartbeatInterval || 5000;
+  const heartbeat = setInterval(() => {
+    const idle = Date.now() - (client.lastActivity || Date.now());
+    if (idle > 60000) {
+      logger.warn(`Client zombie detected (idle ${Math.floor(idle/1000)}s), closing`);
+      clearInterval(heartbeat);
+      ws.terminate();
+    }
+  }, heartbeatMs);
+
+  ws.on('close', () => clearInterval(heartbeat));
 });
 
-// Endpoint per ricevere lo stato sincronizzato
-router.get('/api/status', (req, res) => {
-    res.json({
-        isRunning: bots.length > 0,
-        botCount: bots.length,
-        agarServer: agarServer,
-        spawnPointActive: spawnPointActive,
-        spawnPointX: spawnPointX,
-        spawnPointY: spawnPointY,
-        botNames: botConfig.botNames
+// ═══ Inizializzazione Proxies & Token ═══
+helper.setupProxies();
+syncProxyRotator();
+
+fetchProxies({ skipTest: true }).then(count => {
+  if (count > 0) {
+    helper.setupProxies();
+    syncProxyRotator();
+  }
+  logger.info(`Fetched ${count} fresh proxies`);
+}).catch(e => {
+  logger.warn(`Proxy fetch failed: ${e.message}`);
+});
+
+const proxyRefreshInterval = setInterval(() => {
+  fetchProxies({ skipTest: true }).then(count => {
+    if (count > 0) {
+      helper.setupProxies();
+      syncProxyRotator();
+    }
+    logger.info(`Refreshed ${count} proxies`);
+  }).catch(e => {
+    logger.warn(`Proxy refresh failed: ${e.message}`);
+  });
+}, 60 * 60 * 1000);
+
+manager.checkTokens((count) => {
+  logger.info(`TokenManager: ${count} valid token(s) loaded`);
+});
+
+// ═══ Graceful Shutdown ═══
+let shuttingDown = false;
+const gracefulShutdown = (signal) => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  logger.info(`Received ${signal}, shutting down gracefully...`);
+  clearInterval(proxyRefreshInterval);
+  proxyRotator.destroy();
+  wss.clients.forEach((ws) => {
+    if (ws.readyState === ws.OPEN) ws.close(1001, 'Server shutting down');
+  });
+  wss.close(() => {
+    server.close(() => {
+      logger.info('Server closed');
+      process.exit(0);
     });
-});
+  });
+  setTimeout(() => process.exit(1), 10000);
+};
 
-module.exports = router;
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+export { manager, globalStats, proxyRotator };
