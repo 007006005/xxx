@@ -2,7 +2,7 @@
 
 This branch separates the v6.28 control panel from the bot runtime.
 
-- `userscripts/Zero-The-Legend-v6.28-Render.user.js`: v6.28 menu/control panel; it sends authenticated commands and mouse coordinates to Render.
+- `userscripts/Zero-The-Legend-v6.29-Render.user.js`: v6.28 menu/control panel; it sends authenticated commands and mouse coordinates to Render.
 - `server.js`: HTTPS API, WSS control channel, license verification and health endpoint.
 - `core/BotEngine.js`: one persistent session manager per verified license.
 - `core/Minion.js`: server-side port of the v6.28 bot connection/protocol engine.
