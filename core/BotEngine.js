@@ -137,6 +137,7 @@ export default class BotEngine {
     session.licenseWatchdog = setInterval(async () => {
       if (!this.validateLicenseKey || !session.licenseKey) return;
       const validation = await this.validateLicenseKey(session.licenseKey);
+      if (this.sessions.get(ownerId) !== session) return;
       if (!validation.valid) {
         this.stop(ownerId);
         return;
