@@ -58,6 +58,7 @@
         let engineSocket = null;
         let engineReconnectTimer = null;
         let remoteBotCount = 0;
+        let remoteBotMass = 0;
 
         const memStore = new Map(); // fallback se localStorage è bloccato (Firefox/Edge strict, modalità privata)
         const storage = {
@@ -153,6 +154,7 @@
                 const data = await response.json().catch(() => ({}));
                 if (!response.ok || data.success === false) throw new Error(data.error || data.message || `HTTP ${response.status}`);
                 if (typeof data.botCount === "number") remoteBotCount = data.botCount;
+                if (typeof data.totalMass === "number") remoteBotMass = data.totalMass;
                 return data;
             } catch (error) {
                 showNotice("Render: " + (error.message || "connessione non riuscita"), 3500);
@@ -220,6 +222,7 @@
                 if (!response.ok) return;
                 const data = await response.json();
                 remoteBotCount = Number(data.botCount) || 0;
+                remoteBotMass = Number(data.totalMass) || 0;
                 if (data.agarServer && data.agarServer !== botConfig.agarServer) {
                     botConfig.agarServer = data.agarServer;
                     storage.set("gx-agar-server", data.agarServer);
@@ -538,7 +541,7 @@
         }
 
         function getTotalBotMass() {
-            return 0; // metrica di massa non ancora esposta dal backend
+            return remoteBotMass;
         }
 
         const MOUSE_SCRIPT = `
