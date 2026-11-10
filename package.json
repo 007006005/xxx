@@ -7,7 +7,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check botManager.js && node --check core/BotEngine.js && node --check core/Client.js && node --check core/LicenseAuth.js && node --check core/Minion.js && node --check userscripts/Zero-The-Legend-v6.28-Render.user.js"
+    "check": "node --check server.js && node --check botManager.js && node --check core/BotEngine.js && node --check core/Client.js && node --check core/LicenseAuth.js && node --check core/Minion.js && node --check userscripts/Zero-The-Legend-v6.29-Render.user.js"
   },
   "engines": {
     "node": ">=20"
