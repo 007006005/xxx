@@ -1,25 +1,22 @@
 {
-  "name": "xevbots-local",
-  "version": "2.0.0",
+  "name": "zero-the-legend-render-engine",
+  "version": "3.0.0",
   "private": true,
   "type": "module",
-  "description": "Server bot — versione privacy (nessuna connessione a server esterni)",
+  "description": "Centralized, license-protected bot engine for authorized private game servers",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "check": "node --check server.js && node --check botManager.js && node --check core/BotEngine.js && node --check core/Client.js && node --check core/LicenseAuth.js && node --check core/Minion.js"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "dependencies": {
-    "api": "^6.1.3",
-    "boxen": "^8.0.0",
-    "chalk": "^5.4.0",
     "cors": "^2.8.5",
     "express": "^4.18.2",
-    "https-proxy-agent": "^7.0.5",
     "mysql2": "^3.24.6",
-    "p-queue": "^8.0.1",
-    "proxy": "^4.1.0",
     "smart-buffer": "^4.2.0",
-    "token": "^0.1.0",
     "ws": "^8.21.3"
   }
 }
