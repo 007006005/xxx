@@ -149,6 +149,7 @@ server.on("upgrade", (request, socket, head) => {
 wss.on("connection", (ws) => {
   let ownerId = null;
   let panelClient = null;
+  let tokenExpiryTimer = null;
   let authTimer = setTimeout(() => {
     try { ws.close(1008, "Autenticazione richiesta"); } catch {}
   }, 8000);
@@ -167,6 +168,9 @@ wss.on("connection", (ws) => {
         if (!license.valid) return ws.close(1008, "Licenza non valida");
 
         ownerId = crypto.createHash("sha256").update(payload.sub).digest("hex");
+        tokenExpiryTimer = setTimeout(() => {
+          try { ws.close(1008, "Token scaduto: riconnettersi"); } catch {}
+        }, Math.max(0, payload.exp * 1000 - Date.now()));
         clearTimeout(authTimer);
         authTimer = null;
         connectedPanels.add(ownerId);
@@ -194,6 +198,7 @@ wss.on("connection", (ws) => {
 
   ws.on("close", () => {
     if (authTimer) clearTimeout(authTimer);
+    if (tokenExpiryTimer) clearTimeout(tokenExpiryTimer);
     if (ownerId) {
       connectedPanels.delete(ownerId);
       // Il pannello può disconnettersi: la sessione bot resta attiva.
@@ -203,6 +208,7 @@ wss.on("connection", (ws) => {
 
   ws.on("error", () => {
     if (authTimer) clearTimeout(authTimer);
+    if (tokenExpiryTimer) clearTimeout(tokenExpiryTimer);
   });
 });
 
