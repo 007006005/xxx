@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import Minion from "./Minion.js";
 
 const DEFAULT_MAX_BOTS = 40;
@@ -60,7 +59,8 @@ export default class BotEngine {
 
     const names = Array.isArray(options.botNames)
       ? options.botNames.map((name) => String(name).trim()).filter(Boolean)
-      : ["ZeroTheLegend"];
+      : [];
+    if (!names.length) names.push("ZeroTheLegend");
 
     const config = {
       cords: { x: 0, y: 0 },
