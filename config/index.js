@@ -2,7 +2,7 @@
 // FIX velocità spawn: spawnDelay 300 -> 0 (respawn immediato, massima velocità).
 export const config = {
     serverSettings: {
-        port: 80,
+        port: 800,
         secure: false,
         keyPath: 'path/to/privkey.pem',
         certPath: 'path/to/fullchain.pem',
