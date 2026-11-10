@@ -266,9 +266,18 @@ export default class BotEngine {
     if (!session) {
       return { isRunning: false, botCount: 0, panelConnected: false };
     }
+    let totalMass = 0;
+    for (const bot of session.bots) {
+      if (!bot.isAlive || !bot.myCellIDs || !bot.cells) continue;
+      for (const id of bot.myCellIDs) {
+        const cell = bot.cells.get(id);
+        if (cell) totalMass += Math.floor((cell.size * cell.size) / 100);
+      }
+    }
     return {
       isRunning: true,
       botCount: session.bots.length,
+      totalMass,
       connectedBots: session.bots.filter((bot) => bot.connected).length,
       aliveBots: session.bots.filter((bot) => bot.isAlive).length,
       agarServer: session.server,
