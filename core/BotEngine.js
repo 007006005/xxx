@@ -122,6 +122,10 @@ export default class BotEngine {
       throw error;
     }
 
+    const followMouse = !config.botAi && !config.vShield && !config.freezeBots
+      && !config.patrolMode && !config.botOPK && !config.tricksplitActive;
+    for (const bot of session.bots) bot.followMouse = followMouse;
+
     this.sessions.set(ownerId, session);
     setActiveBotCount(this.totalBots());
     session.supervisor = setInterval(() => {
@@ -200,7 +204,8 @@ export default class BotEngine {
         && !session.controller.config.vShield
         && !session.controller.config.freezeBots
         && !session.controller.config.patrolMode
-        && !session.controller.config.botOPK;
+        && !session.controller.config.botOPK
+        && !session.controller.config.tricksplitActive;
     }
 
     return this.status(ownerId);
@@ -263,6 +268,8 @@ export default class BotEngine {
     return {
       isRunning: true,
       botCount: session.bots.length,
+      connectedBots: session.bots.filter((bot) => bot.connected).length,
+      aliveBots: session.bots.filter((bot) => bot.isAlive).length,
       agarServer: session.server,
       panelConnected: session.panelConnected,
       uptimeSeconds: Math.floor((Date.now() - session.startedAt) / 1000),
