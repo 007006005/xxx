@@ -30,6 +30,8 @@ export default class Minion {
     this.config = client.config || {};
     this.index = Number.isInteger(client.index) ? client.index : 0;
     this.followMouse = true;
+    this.reconnectAttempts = 0;
+    this.reconnectTimer = null;
     this.ws = null;
     this.isAlive = false;
     this.isClosed = false;
@@ -57,10 +59,6 @@ export default class Minion {
     if (this.isClosed) return;
     try {
       this.ws = new WebSocket(this.client.server, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-          "Origin": "https://agar.io"
-        },
         perMessageDeflate: false
       });
       this.ws.binaryType = "arraybuffer";
@@ -99,6 +97,7 @@ export default class Minion {
       }
     }, 300);
 
+    this.reconnectAttempts = 0;
     this.facebookBots = true;
   }
 
@@ -270,6 +269,23 @@ export default class Minion {
 
   split() { this.send(new Uint8Array([17]), true); }
   eject() { this.send(new Uint8Array([21]), true); }
-  stop() { this.isClosed = true; try { this.ws?.close(); } catch (e) {} }
-  onClose() { this.isAlive = false; this.isClosed = true; }
+  stop() {
+    this.isClosed = true;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+    try { this.ws?.close(); } catch (e) {}
+  }
+
+  onClose() {
+    this.isAlive = false;
+    if (this.isClosed || this.reconnectTimer) return;
+    const maxAttempts = Math.max(0, Number(process.env.BOT_RECONNECT_ATTEMPTS) || 8);
+    if (this.reconnectAttempts >= maxAttempts) return;
+    const delay = Math.min(30000, 1000 * (2 ** this.reconnectAttempts));
+    this.reconnectAttempts += 1;
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      if (!this.isClosed) this.connect();
+    }, delay);
+  }
 }
