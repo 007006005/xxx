@@ -57,7 +57,7 @@ async function validateLicenseKey(licenseKey) {
 engine.setLicenseValidator(validateLicenseKey);
 const requireLicense = licenseAuth(validateLicenseKey);
 
-const allowedOrigins = String(process.env.CORS_ORIGINS || "https://agar.io,https://www.agar.io")
+const allowedOrigins = String(process.env.CORS_ORIGINS || "https://agar.io,https://www.agar.io,https://delt.io,https://www.delt.io,https://agar.cc,https://www.agar.cc,https://agar.su,https://www.agar.su")
   .split(",").map((origin) => origin.trim()).filter(Boolean);
 
 app.use(cors({
