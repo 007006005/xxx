@@ -23,7 +23,7 @@ Set these environment variables in the Render service:
 | `GAME_SERVER_ALLOWLIST` | Yes | Comma-separated exact hostnames of private/explicitly authorized WSS game servers |
 | `MAX_BOTS_PER_SESSION` | No | Global per-session cap; defaults to 40 |
 | `BOT_RECONNECT_ATTEMPTS` | No | Reconnect attempt cap; defaults to 8 |
-| `CORS_ORIGINS` | Recommended | Comma-separated browser origins allowed to call the API |
+| `CORS_ORIGINS` | Recommended | Comma-separated browser origins allowed to call the API; defaults to `https://agar.io,https://www.agar.io` |
 
 *Use either `MYSQL_URL` or the individual `DB_*` variables. The license table must contain `license_key`, `is_active`, `expire_date`, and `max_bots` columns.
 
