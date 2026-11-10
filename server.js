@@ -9,6 +9,7 @@ import { createLicenseToken, licenseAuth, verifyLicenseToken } from "./core/Lice
 import createBotManagerRouter from "./botManager.js";
 
 const app = express();
+app.set("trust proxy", 1);
 const engine = new BotEngine();
 const PORT = Number(process.env.PORT) || 3000;
 
@@ -56,7 +57,7 @@ async function validateLicenseKey(licenseKey) {
 engine.setLicenseValidator(validateLicenseKey);
 const requireLicense = licenseAuth(validateLicenseKey);
 
-const allowedOrigins = String(process.env.CORS_ORIGINS || "")
+const allowedOrigins = String(process.env.CORS_ORIGINS || "https://agar.io,https://www.agar.io")
   .split(",").map((origin) => origin.trim()).filter(Boolean);
 
 app.use(cors({
