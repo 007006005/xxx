@@ -64,6 +64,7 @@ export default class BotEngine {
 
     const config = {
       cords: { x: 0, y: 0 },
+      botCount,
       spawnPointActive: Boolean(options.spawnPointActive),
       spawnPointX: Number(options.spawnPointX) || 0,
       spawnPointY: Number(options.spawnPointY) || 0,
@@ -137,6 +138,12 @@ export default class BotEngine {
         }
       }
       session.botCount = nextCount;
+      session.controller.config.botCount = nextCount;
+    }
+
+    if (Array.isArray(patch.botNames)) {
+      const names = patch.botNames.map((name) => String(name).trim()).filter(Boolean);
+      if (names.length) session.controller.config.names = names;
     }
 
     const booleanFields = [
@@ -169,6 +176,21 @@ export default class BotEngine {
         && !session.controller.config.botOPK;
     }
 
+    return this.status(ownerId);
+  }
+
+  command(ownerId, action) {
+    const session = this.sessions.get(ownerId);
+    if (!session) throw new Error("Nessuna sessione bot attiva");
+    if (action === "split") {
+      for (const bot of session.bots) bot.split();
+    } else if (action === "eject") {
+      for (const bot of session.bots) bot.eject();
+    } else if (action === "reconnect") {
+      for (const bot of session.bots) bot.reconnect();
+    } else {
+      throw new Error("Comando bot non supportato");
+    }
     return this.status(ownerId);
   }
 
