@@ -22,7 +22,6 @@ export default function createBotManagerRouter({ engine, requireLicense }) {
       tricksplitActive: body.tricksplitActive,
       targetNickname: body.targetNickname,
       licenseMaxBots: license.maxBots,
-      licenseKey: license.licenseKey,
     };
   }
 
