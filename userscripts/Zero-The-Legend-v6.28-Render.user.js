@@ -237,6 +237,7 @@
 
         setInterval(syncWithEngine, 3000);
         setInterval(sendEngineTarget, 120);
+        window.__zeroConnectEngineSocket = connectEngineSocket;
         connectEngineSocket();
 
         const SoundFX = {
@@ -1273,7 +1274,14 @@
     };
 
     let started = false;
-    function start() { if (started) return; started = true; try { __zeroMain(); } catch (e) { console.error(e); } }
+    function start() {
+        if (started) {
+            try { window.__zeroConnectEngineSocket?.(); } catch (e) {}
+            return;
+        }
+        started = true;
+        try { __zeroMain(); } catch (e) { console.error(e); }
+    }
 
     /* ---------- vincolo browser/sessione: l'IP lo vede solo il server, il client invia device + sessione ---------- */
     let memDev = null;
@@ -1621,6 +1629,7 @@
         const data = await response.json().catch(() => ({}));
         if (!response.ok || !data.valid || !data.token) throw new Error(data.message || "Verifica licenza Render non riuscita");
         engineAccessToken = data.token;
+        try { window.__zeroConnectEngineSocket?.(); } catch (e) {}
         auth.engineToken = data.token;
         auth.engineTokenExpiresAt = Date.now() + (Number(data.expiresIn) || 900) * 1000;
         save(auth);
