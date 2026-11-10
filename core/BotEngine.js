@@ -264,7 +264,7 @@ export default class BotEngine {
   status(ownerId) {
     const session = this.sessions.get(ownerId);
     if (!session) {
-      return { isRunning: false, botCount: 0, panelConnected: false };
+      return { isRunning: false, botCount: 0, connectedBots: 0, aliveBots: 0, totalMass: 0, panelConnected: false };
     }
     let totalMass = 0;
     for (const bot of session.bots) {
