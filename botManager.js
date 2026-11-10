@@ -36,6 +36,8 @@ export default function createBotManagerRouter({ engine, requireLicense }) {
       } else if (action === "stop") {
         engine.stop(req.ownerId);
         result = engine.status(req.ownerId);
+      } else if (action === "command") {
+        result = engine.command(req.ownerId, body.command);
       } else if (action === "sync_bots") {
         const current = engine.status(req.ownerId);
         if (current.isRunning) {
@@ -56,6 +58,15 @@ export default function createBotManagerRouter({ engine, requireLicense }) {
   router.post("/start", (req, res) => {
     try {
       const result = engine.start(req.ownerId, botOptions(req.body || {}, req.license));
+      return res.json({ success: true, ...result });
+    } catch (error) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
+  });
+
+  router.post("/command", (req, res) => {
+    try {
+      const result = engine.command(req.ownerId, req.body?.command);
       return res.json({ success: true, ...result });
     } catch (error) {
       return res.status(400).json({ success: false, error: error.message });
