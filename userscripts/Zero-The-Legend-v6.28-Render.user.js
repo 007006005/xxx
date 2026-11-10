@@ -1228,8 +1228,18 @@
         }
 
         function hookWebSocket() {
-            const blocked = ["delt.io", "ixagar", "glitch", "socket.io", "firebase", "agartool.io", "herokuapp", "localhost", "onrender.com"];
-            const isBlocked = (url) => blocked.some((d) => url.includes(d));
+            const gameServerHosts = ["agar.io", "delt.io", "agar.cc", "agar.su"];
+            const isAuthorizedGameServer = (url) => {
+                try {
+                    const parsed = new URL(url);
+                    const hostname = parsed.hostname.toLowerCase();
+                    return parsed.protocol === "wss:" && gameServerHosts.some((host) =>
+                        hostname === host || hostname.endsWith("." + host)
+                    );
+                } catch (e) {
+                    return false;
+                }
+            };
             const proto = WebSocket.prototype;
             const original = proto.send;
             if (original && original.__zeroHook) return; // già agganciato: niente doppio hook
@@ -1238,7 +1248,7 @@
                     SpeedHack.patch(this);
                     try {
                         const url = this.url;
-                        if (url && !isBlocked(url) && /agar/i.test(url) && url !== botConfig.agarServer) {
+                        if (url && isAuthorizedGameServer(url) && url !== botConfig.agarServer) {
                             botConfig.agarServer = url;
                             storage.set("gx-agar-server", url);
                             pushStateToServer();
