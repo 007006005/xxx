@@ -1,22 +1,21 @@
 // ==UserScript==
 // @name         Zero The Legend & ZeroExtens PRO - Bot OPK & Speed Hack (v6.28 LICENZA)
-// @version      6.28
+// @version      6.29
 // @description  Script completo con Full Map, Menu Dragable corretto, Nomi bot modificabili, Speed Hack e Keybinds.
 // @namespace    https://master-elettroerosioni.it/
 // @icon         https://master-elettroerosioni.it/favicon.ico
 // @match        *://agar.io/*
 // @match        *://www.agar.io/*
+// @match        *://*.agar.io/*
 // @match        *://delt.io/*
+// @match        *://www.delt.io/*
 // @match        *://*.delt.io/*
-// @match        *://deltav4.gitlab.io/*
-// @match        *://agar.master-elettroerosioni.it/*
-// @match        *://*.agar.master-elettroerosioni.it/*
 // @match        *://agar.cc/*
+// @match        *://www.agar.cc/*
 // @match        *://*.agar.cc/*
 // @match        *://agar.su/*
+// @match        *://www.agar.su/*
 // @match        *://*.agar.su/*
-// @match        *://agar2.com/*
-// @match        *://*.agar2.com/*
 // @run-at       document-end
 // @noframes
 // @connect      master-elettroerosioni.it
@@ -42,8 +41,13 @@
     const PREMIUM_URL = "https://master-elettroerosioni.it/";  // >>> pagina acquisto licenze premium (modifica qui) <<<
     const RENEW_URL   = "https://master-elettroerosioni.it/";  // >>> pagina rinnovo licenza (modifica qui) <<<
     let licenseMaxBots = Infinity;
-    const ENGINE_HTTP_URL = "https://xxx-6j2x.onrender.com";
-    const ENGINE_WS_URL = "wss://xxx-6j2x.onrender.com/ws";
+    // Configurare prima di usare il pannello: window.ZERO_ENGINE_HTTP_URL = "https://<servizio-render>.onrender.com";
+    // Nessun endpoint segnaposto e nessuna connessione automatica.
+    const ENGINE_HTTP_URL = String(window.ZERO_ENGINE_HTTP_URL || "").trim().replace(/\\/+$/, "");
+    const ENGINE_WS_URL = ENGINE_HTTP_URL
+        ? ENGINE_HTTP_URL.replace(/^http:/i, "ws:").replace(/^https:/i, "wss:") + "/ws"
+        : "";
+    const engineConfigured = () => /^https:\\/\\//i.test(ENGINE_HTTP_URL) && Boolean(ENGINE_WS_URL);
     let engineAccessToken = null;
     let engineTokenRefreshTimer = null;
 
@@ -62,17 +66,25 @@
         let remoteBotMass = 0;
 
         const memStore = new Map(); // fallback se localStorage è bloccato (Firefox/Edge strict, modalità privata)
+        const SITE_CONFIG_ID = (() => {
+            const host = location.hostname.toLowerCase();
+            for (const root of ["agar.io", "delt.io", "agar.cc", "agar.su"]) {
+                if (host === root || host.endsWith("." + root)) return root.replace(/\\./g, "-");
+            }
+            return "unknown-site";
+        })();
+        const siteStorageKey = (key) => `zero:${SITE_CONFIG_ID}:${key}`;
         const storage = {
             get(key, fallback = null) {
                 try {
-                    const v = localStorage.getItem(key);
+                    const v = localStorage.getItem(siteStorageKey(key));
                     if (v !== null) return v;
                 } catch (e) {}
                 return memStore.has(key) ? memStore.get(key) : fallback;
             },
             set(key, value) {
-                memStore.set(key, String(value));
-                try { localStorage.setItem(key, value); } catch (e) {}
+                memStore.set(siteStorageKey(key), String(value));
+                try { localStorage.setItem(siteStorageKey(key), value); } catch (e) {}
             }
         };
 
@@ -135,6 +147,7 @@
 
         async function pushStateToServer(extraData = {}) {
             if (isSyncingToServer) return null;
+            if (!engineConfigured()) { showNotice("Configura ZERO_ENGINE_HTTP_URL per collegare Render", 3500); return null; }
             if (!engineAccessToken) { showNotice("Backend Render non autenticato", 3000); return null; }
             isSyncingToServer = true;
             try {
@@ -165,7 +178,7 @@
         }
 
         function connectEngineSocket() {
-            if (!engineAccessToken || (engineSocket && engineSocket.readyState < 2)) return;
+            if (!engineConfigured() || !engineAccessToken || (engineSocket && engineSocket.readyState < 2)) return;
             try {
                 const ws = new WebSocket(ENGINE_WS_URL);
                 engineSocket = ws;
@@ -201,6 +214,7 @@
         }
 
         async function engineCommand(command) {
+            if (!engineConfigured()) { showNotice("Configura ZERO_ENGINE_HTTP_URL per collegare Render", 3500); return null; }
             if (!engineAccessToken) { showNotice("Backend Render non autenticato", 2500); return null; }
             try {
                 const response = await getFetch()(`${ENGINE_HTTP_URL}/api/command`, {
@@ -215,7 +229,7 @@
         }
 
         async function syncWithEngine() {
-            if (!engineAccessToken) return;
+            if (!engineConfigured() || !engineAccessToken) return;
             try {
                 const response = await getFetch()(`${ENGINE_HTTP_URL}/api/status?t=${Date.now()}`, {
                     headers: { "Authorization": `Bearer ${engineAccessToken}` }, mode: "cors"
@@ -241,10 +255,8 @@
             } catch (e) {}
         }
 
-        setInterval(syncWithEngine, 3000);
-        setInterval(sendEngineTarget, 120);
+        // Connessioni Render solo su azione esplicita dell’utente (start/stop): nessun polling o WS all’avvio.
         window.__zeroConnectEngineSocket = connectEngineSocket;
-        connectEngineSocket();
 
         const SoundFX = {
             ctx: null,
@@ -359,6 +371,7 @@
         async function startBots(action) {
             if (isStarting || isStopping) return;
             if (action === "start" && !botConfig.startedBots) {
+                if (!engineConfigured()) { showNotice("Configura prima ZERO_ENGINE_HTTP_URL", 3500); return; }
                 if (!engineAccessToken) { showNotice("Attiva la licenza e verifica il collegamento Render", 3500); return; }
                 if (!botConfig.agarServer) { showNotice("Entra prima nel server di gioco autorizzato", 3000); return; }
                 isStarting = true;
@@ -1292,10 +1305,7 @@
 
     let started = false;
     function start() {
-        if (started) {
-            try { window.__zeroConnectEngineSocket?.(); } catch (e) {}
-            return;
-        }
+        if (started) return;
         started = true;
         try { __zeroMain(); } catch (e) { console.error(e); }
     }
@@ -1638,6 +1648,7 @@
     async function refreshEngineToken() {
         const auth = saved();
         if (!auth || !auth.key) throw new Error("Chiave licenza non disponibile");
+        if (!engineConfigured()) throw new Error("ZERO_ENGINE_HTTP_URL non configurato: Render resta scollegato");
         const response = await getFetch()(`${ENGINE_HTTP_URL}/api/verify-license`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1646,7 +1657,6 @@
         const data = await response.json().catch(() => ({}));
         if (!response.ok || !data.valid || !data.token) throw new Error(data.message || "Verifica licenza Render non riuscita");
         engineAccessToken = data.token;
-        try { window.__zeroConnectEngineSocket?.(); } catch (e) {}
         auth.engineToken = data.token;
         auth.engineTokenExpiresAt = Date.now() + (Number(data.expiresIn) || 900) * 1000;
         save(auth);
