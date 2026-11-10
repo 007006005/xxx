@@ -58,6 +58,7 @@
         let engineSocket = null;
         let engineReconnectTimer = null;
         let remoteBotCount = 0;
+        let remoteAliveBots = 0;
         let remoteBotMass = 0;
 
         const memStore = new Map(); // fallback se localStorage è bloccato (Firefox/Edge strict, modalità privata)
@@ -154,6 +155,7 @@
                 const data = await response.json().catch(() => ({}));
                 if (!response.ok || data.success === false) throw new Error(data.error || data.message || `HTTP ${response.status}`);
                 if (typeof data.botCount === "number") remoteBotCount = data.botCount;
+                if (typeof data.aliveBots === "number") remoteAliveBots = data.aliveBots;
                 if (typeof data.totalMass === "number") remoteBotMass = data.totalMass;
                 return data;
             } catch (error) {
@@ -222,6 +224,7 @@
                 if (!response.ok) return;
                 const data = await response.json();
                 remoteBotCount = Number(data.botCount) || 0;
+                remoteAliveBots = Number(data.aliveBots) || 0;
                 remoteBotMass = Number(data.totalMass) || 0;
                 if (data.agarServer && data.agarServer !== botConfig.agarServer) {
                     botConfig.agarServer = data.agarServer;
@@ -371,6 +374,7 @@
                     isStarting = false; render(); return;
                 }
                 remoteBotCount = Number(result.botCount) || botConfig.botCount;
+                remoteAliveBots = Number(result.aliveBots) || 0;
                 connectEngineSocket();
                 isStarting = false;
                 render();
@@ -382,7 +386,7 @@
                 botConfig.startedBots = false; botConfig.stoppedBots = true;
                 botConfig.botAi = false; botConfig.vShield = false; botConfig.freezeBots = false;
                 botConfig.patrolMode = false; botConfig.botOPK = false; botConfig.tricksplitActive = false;
-                remoteBotCount = 0; remoteBotMass = 0; startTime = null; isStopping = false; render();
+                remoteBotCount = 0; remoteAliveBots = 0; remoteBotMass = 0; startTime = null; isStopping = false; render();
             }
         }
 
@@ -891,7 +895,7 @@
             if (startBtn) startBtn.style.display = running ? "none" : "inline-flex";
             if (stopBtn) stopBtn.style.display = running ? "inline-flex" : "none";
 
-            let alive = remoteBotCount;
+            let alive = remoteAliveBots;
             setText($(".gx-botCount"), running ? `${alive}/${botConfig.botCount}` : String(botConfig.botCount));
             setText($(".gx-botMass"), running ? String(getTotalBotMass()) : "0");
 
