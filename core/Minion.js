@@ -27,6 +27,9 @@ export default class Minion {
 
   constructor(client) {
     this.client = client;
+    this.config = client.config || {};
+    this.index = Number.isInteger(client.index) ? client.index : 0;
+    this.followMouse = true;
     this.ws = null;
     this.isAlive = false;
     this.isClosed = false;
@@ -190,7 +193,22 @@ export default class Minion {
       this.y = sumY / count;
       this.size = totalSize / count;
 
-      const target = this.nearestPlayer(this.x, this.y, this.size);
+      let target;
+      if (this.config.spawnPointActive) {
+        target = {
+          x: Number(this.config.spawnPointX) || 0,
+          y: Number(this.config.spawnPointY) || 0
+        };
+      } else if (this.followMouse) {
+        target = {
+          x: Number(this.client.userX) / (this.rX || 1),
+          y: Number(this.client.userY) / (this.rY || 1)
+        };
+      } else {
+        const pellet = this.nearestPellet(this.x, this.y);
+        target = pellet ? { x: pellet.x, y: pellet.y } : this.nearestPlayer(this.x, this.y, this.size);
+      }
+
       const moveBuf = new SmartBuffer();
       moveBuf.writeUInt8(16);
       moveBuf.writeInt32LE(Math.round(target.x));
