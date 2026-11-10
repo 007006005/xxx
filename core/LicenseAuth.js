@@ -39,7 +39,7 @@ export function licenseAuth() {
   return function requireLicense(req, res, next) {
     try {
       const authorization = req.headers.authorization || "";
-      const match = authorization.match(/^Bearer\\s+(.+)$/i);
+      const match = authorization.match(/^Bearer\s+(.+)$/i);
       if (!match) return res.status(401).json({ error: "Autenticazione richiesta" });
       const payload = verifyLicenseToken(match[1]);
       req.license = { maxBots: Math.max(1, Math.min(payload.maxBots, Number(process.env.MAX_BOTS_PER_SESSION) || 40)) };
