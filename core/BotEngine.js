@@ -27,7 +27,11 @@ export function validateGameServer(serverUrl) {
   }
 
   const hosts = allowedHosts();
-  if (!hosts.size || !hosts.has(parsed.hostname.toLowerCase())) {
+  const hostname = parsed.hostname.toLowerCase();
+  const isAllowedHost = [...hosts].some((allowedHost) =>
+    hostname === allowedHost || hostname.endsWith(`.${allowedHost}`)
+  );
+  if (!hosts.size || !isAllowedHost) {
     throw new Error("Server non autorizzato: configura GAME_SERVER_ALLOWLIST su Render");
   }
 
