@@ -4,6 +4,7 @@ import cors from "cors";
 import mysql from "mysql2/promise";
 import { WebSocketServer, WebSocket } from "ws";
 import BotEngine from "./core/BotEngine.js";
+import Client from "./core/Client.js";
 import { createLicenseToken, licenseAuth, verifyLicenseToken } from "./core/LicenseAuth.js";
 import createBotManagerRouter from "./botManager.js";
 
@@ -146,6 +147,7 @@ server.on("upgrade", (request, socket, head) => {
 
 wss.on("connection", (ws) => {
   let ownerId = null;
+  let panelClient = null;
   let authTimer = setTimeout(() => {
     try { ws.close(1008, "Autenticazione richiesta"); } catch {}
   }, 8000);
@@ -168,15 +170,13 @@ wss.on("connection", (ws) => {
         authTimer = null;
         connectedPanels.add(ownerId);
         engine.setPanelConnected(ownerId, true);
+        panelClient = new Client(ws, engine, ownerId);
         ws.send(JSON.stringify({ type: "ready", status: engine.status(ownerId) }));
         return;
       }
 
       if (isBinary) {
-        const packet = Buffer.from(data);
-        if (packet.length >= 9 && packet.readUInt8(0) === 16) {
-          engine.updateTarget(ownerId, packet.readInt32LE(1), packet.readInt32LE(5));
-        }
+        panelClient?.handleMessage(data);
         return;
       }
 
@@ -196,7 +196,7 @@ wss.on("connection", (ws) => {
     if (ownerId) {
       connectedPanels.delete(ownerId);
       // Il pannello può disconnettersi: la sessione bot resta attiva.
-      engine.setPanelConnected(ownerId, false);
+      panelClient?.disconnect();
     }
   });
 
