@@ -1,4 +1,4 @@
-import Minion from "./Minion.js";
+import Minion, { setActiveBotCount } from "./Minion.js";
 
 const DEFAULT_MAX_BOTS = 40;
 
@@ -65,7 +65,8 @@ export default class BotEngine {
     const config = {
       cords: { x: 0, y: 0 },
       botCount,
-      botCount,
+      startedBots: true,
+      agarServer: server,
       spawnPointActive: Boolean(options.spawnPointActive),
       spawnPointX: Number(options.spawnPointX) || 0,
       spawnPointY: Number(options.spawnPointY) || 0,
@@ -108,7 +109,7 @@ export default class BotEngine {
           botName: `${botName} ${index + 1}`,
           index,
         };
-        session.bots.push(new Minion(botClient));
+        session.bots.push(new Minion(botClient, botClient.botName, index));
       }
     } catch (error) {
       for (const bot of session.bots) bot.stop();
@@ -116,6 +117,13 @@ export default class BotEngine {
     }
 
     this.sessions.set(ownerId, session);
+    setActiveBotCount(this.totalBots());
+    session.supervisor = setInterval(() => {
+      const now = Date.now();
+      for (const bot of session.bots) {
+        try { bot.check(now); } catch {}
+      }
+    }, 500);
     return this.status(ownerId);
   }
 
@@ -135,11 +143,12 @@ export default class BotEngine {
             ...session.controller,
             botName: `${name} ${index + 1}`,
             index,
-          }));
+          }, `${name} ${index + 1}`, index));
         }
       }
       session.botCount = nextCount;
       session.controller.config.botCount = nextCount;
+      setActiveBotCount(this.totalBots());
     }
 
     if (Array.isArray(patch.botNames)) {
@@ -188,7 +197,7 @@ export default class BotEngine {
     } else if (action === "eject") {
       for (const bot of session.bots) bot.eject();
     } else if (action === "reconnect") {
-      for (const bot of session.bots) bot.reconnect();
+      for (const bot of session.bots) bot.requestConnect();
     } else {
       throw new Error("Comando bot non supportato");
     }
@@ -229,10 +238,13 @@ export default class BotEngine {
   stop(ownerId) {
     const session = this.sessions.get(ownerId);
     if (!session) return false;
+    session.controller.config.startedBots = false;
+    if (session.supervisor) clearInterval(session.supervisor);
     for (const bot of session.bots) {
       try { bot.stop(); } catch {}
     }
     this.sessions.delete(ownerId);
+    setActiveBotCount(this.totalBots());
     return true;
   }
 
@@ -257,9 +269,13 @@ export default class BotEngine {
     };
   }
 
+  totalBots() {
+    let total = 0;
+    for (const session of this.sessions.values()) total += session.bots.length;
+    return total;
+  }
+
   stats() {
-    let activeBots = 0;
-    for (const session of this.sessions.values()) activeBots += session.bots.length;
-    return { sessions: this.sessions.size, activeBots };
+    return { sessions: this.sessions.size, activeBots: this.totalBots() };
   }
 }
