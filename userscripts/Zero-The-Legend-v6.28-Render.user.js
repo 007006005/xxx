@@ -382,7 +382,7 @@
                 botConfig.startedBots = false; botConfig.stoppedBots = true;
                 botConfig.botAi = false; botConfig.vShield = false; botConfig.freezeBots = false;
                 botConfig.patrolMode = false; botConfig.botOPK = false; botConfig.tricksplitActive = false;
-                remoteBotCount = 0; startTime = null; isStopping = false; render();
+                remoteBotCount = 0; remoteBotMass = 0; startTime = null; isStopping = false; render();
             }
         }
 
