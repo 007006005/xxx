@@ -59,11 +59,6 @@ function clampCount(value, licenseMaxBots) {
 export default class BotEngine {
   constructor() {
     this.sessions = new Map();
-    this.validateLicenseKey = null;
-  }
-
-  setLicenseValidator(validateLicenseKey) {
-    this.validateLicenseKey = validateLicenseKey;
   }
 
   start(ownerId, options = {}) {
@@ -110,7 +105,6 @@ export default class BotEngine {
     const session = {
       ownerId,
       server,
-      licenseKey: String(options.licenseKey || ""),
       controller,
       bots: [],
       botCount,
@@ -146,18 +140,6 @@ export default class BotEngine {
         try { bot.check(now); } catch {}
       }
     }, 500);
-    session.licenseWatchdog = setInterval(async () => {
-      if (!this.validateLicenseKey || !session.licenseKey) return;
-      const validation = await this.validateLicenseKey(session.licenseKey);
-      if (this.sessions.get(ownerId) !== session) return;
-      if (!validation.valid) {
-        this.stop(ownerId);
-        return;
-      }
-      const currentMax = Math.max(1, Number(validation.data.max_bots) || 1);
-      session.licenseMaxBots = currentMax;
-      if (session.bots.length > currentMax) this.update(ownerId, { botCount: currentMax });
-    }, 60_000);
     return this.status(ownerId);
   }
 
