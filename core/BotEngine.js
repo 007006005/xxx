@@ -28,6 +28,11 @@ export function validateGameServer(serverUrl) {
 
   const hosts = allowedHosts();
   const hostname = parsed.hostname.toLowerCase();
+  const publicGameRoots = ["agar.io", "delt.io", "agar.cc", "agar.su"];
+  const isPublicGameHost = publicGameRoots.some((root) => hostname === root || hostname.endsWith(`.${root}`));
+  if (isPublicGameHost) {
+    throw new Error("Host dei servizi pubblici non ammesso: usare esclusivamente un server privato controllato e autorizzato");
+  }
   const isAllowedHost = [...hosts].some((allowedHost) =>
     hostname === allowedHost || hostname.endsWith(`.${allowedHost}`)
   );
@@ -62,6 +67,9 @@ export default class BotEngine {
   }
 
   start(ownerId, options = {}) {
+    if (process.env.GAME_CONNECTIONS_ENABLED !== "true") {
+      throw new Error("Connessioni di gioco disabilitate: impostare GAME_CONNECTIONS_ENABLED=true solo dopo verifica e autorizzazione del server privato");
+    }
     const server = validateGameServer(options.agarServer);
     const botCount = clampCount(options.botCount ?? 1, options.licenseMaxBots);
     this.stop(ownerId);
