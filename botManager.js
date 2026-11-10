@@ -1,83 +1,75 @@
-import express from 'express';
+import express from "express";
 
-const router = express.Router();
+export default function createBotManagerRouter({ engine, requireLicense }) {
+  const router = express.Router();
+  router.use(requireLicense);
 
-let bots = [];
-let botConfig = {
-    botCount: 10,
-    botNames: ["Zero The Legend", "Zero Extens", "Master CNC", "XEVBOTS"],
-    agarServer: "wss://agar.io",
-    ports: ["", "", "", ""],
-    spawnPointActive: false,
-    spawnPointX: 0,
-    spawnPointY: 0,
-    isRunning: false
-};
-
-function createBot(idx) {
+  function botOptions(body, license) {
     return {
-        id: idx,
-        name: botConfig.botNames[idx % botConfig.botNames.length],
-        port: botConfig.ports[idx % botConfig.ports.length],
-        spawnPointActive: botConfig.spawnPointActive,
-        spawnPointX: botConfig.spawnPointX,
-        spawnPointY: botConfig.spawnPointY,
-        isAlive: false
+      botCount: body.botCount,
+      botNames: typeof body.botName === "string"
+        ? body.botName.split(",").map((name) => name.trim()).filter(Boolean)
+        : body.botNames,
+      agarServer: body.agarServer,
+      spawnPointActive: body.spawnPointActive,
+      spawnPointX: body.spawnPointX,
+      spawnPointY: body.spawnPointY,
+      botAi: body.botAi,
+      botOPK: body.botOPK,
+      vShield: body.vShield,
+      freezeBots: body.freezeBots,
+      patrolMode: body.patrolMode,
+      tricksplitActive: body.tricksplitActive,
+      targetNickname: body.targetNickname,
+      licenseMaxBots: license.maxBots,
     };
-}
+  }
 
-router.post('/sync', (req, res) => {
+  router.post("/sync", (req, res) => {
     try {
-        const { action, botCount, botName, agarServer, ports, spawnPointActive, spawnPointX, spawnPointY } = req.body;
+      const body = req.body || {};
+      const action = body.action || "sync_bots";
+      let result;
 
-        if (action === "start") {
-            botConfig.botCount = botCount || botConfig.botCount;
-            botConfig.isRunning = true;
-            bots = Array(botConfig.botCount).fill().map((_, idx) => createBot(idx));
-            res.json({ success: true, message: "Bot avviati", bots: bots.length });
-        } else if (action === "stop") {
-            botConfig.isRunning = false;
-            bots = [];
-            res.json({ success: true, message: "Bot fermati" });
-        } else if (action === "sync_bots") {
-            botConfig.botCount = botCount || botConfig.botCount;
-            botConfig.botNames = botName ? botName.split(", ").filter(name => name) : botConfig.botNames;
-            botConfig.agarServer = agarServer || botConfig.agarServer;
-            botConfig.ports = ports || botConfig.ports;
-            botConfig.spawnPointActive = spawnPointActive !== undefined ? spawnPointActive : botConfig.spawnPointActive;
-            botConfig.spawnPointX = spawnPointX !== undefined ? parseFloat(spawnPointX) : botConfig.spawnPointX;
-            botConfig.spawnPointY = spawnPointY !== undefined ? parseFloat(spawnPointY) : botConfig.spawnPointY;
-
-            bots = Array(botConfig.botCount).fill().map((_, idx) => createBot(idx));
-            res.json({
-                success: true,
-                botCount: bots.length,
-                botNames: botConfig.botNames,
-                agarServer: botConfig.agarServer,
-                ports: botConfig.ports,
-                spawnPointActive: botConfig.spawnPointActive,
-                spawnPointX: botConfig.spawnPointX,
-                spawnPointY: botConfig.spawnPointY
-            });
+      if (action === "start") {
+        result = engine.start(req.ownerId, botOptions(body, req.license));
+      } else if (action === "stop") {
+        engine.stop(req.ownerId);
+        result = engine.status(req.ownerId);
+      } else if (action === "sync_bots") {
+        const current = engine.status(req.ownerId);
+        if (current.isRunning) {
+          result = engine.update(req.ownerId, botOptions(body, req.license));
         } else {
-            res.status(400).json({ error: "Azione non valida" });
+          result = current;
         }
-    } catch (e) {
-        console.error("Errore nel gestire la richiesta:", e);
-        res.status(400).json({ error: "Errore interno del server" });
+      } else {
+        return res.status(400).json({ error: "Azione non valida" });
+      }
+
+      return res.json({ success: true, ...result });
+    } catch (error) {
+      return res.status(400).json({ success: false, error: error.message });
     }
-});
+  });
 
-router.get('/status', (req, res) => {
-    res.json({
-        isRunning: botConfig.isRunning,
-        botCount: bots.length,
-        agarServer: botConfig.agarServer,
-        spawnPointActive: botConfig.spawnPointActive,
-        spawnPointX: botConfig.spawnPointX,
-        spawnPointY: botConfig.spawnPointY,
-        botNames: botConfig.botNames
-    });
-});
+  router.post("/start", (req, res) => {
+    try {
+      const result = engine.start(req.ownerId, botOptions(req.body || {}, req.license));
+      return res.json({ success: true, ...result });
+    } catch (error) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
+  });
 
-export default router;
+  router.post("/stop", (req, res) => {
+    engine.stop(req.ownerId);
+    return res.json({ success: true, ...engine.status(req.ownerId) });
+  });
+
+  router.get("/status", (req, res) => {
+    return res.json(engine.status(req.ownerId));
+  });
+
+  return router;
+}
