@@ -53,6 +53,7 @@ async function validateLicenseKey(licenseKey) {
   }
 }
 
+engine.setLicenseValidator(validateLicenseKey);
 const requireLicense = licenseAuth(validateLicenseKey);
 
 const allowedOrigins = String(process.env.CORS_ORIGINS || "")
