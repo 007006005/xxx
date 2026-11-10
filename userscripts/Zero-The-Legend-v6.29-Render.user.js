@@ -41,9 +41,10 @@
     const PREMIUM_URL = "https://master-elettroerosioni.it/";  // >>> pagina acquisto licenze premium (modifica qui) <<<
     const RENEW_URL   = "https://master-elettroerosioni.it/";  // >>> pagina rinnovo licenza (modifica qui) <<<
     let licenseMaxBots = Infinity;
-    // Configurare prima di usare il pannello: window.ZERO_ENGINE_HTTP_URL = "https://<servizio-render>.onrender.com";
-    // Nessun endpoint segnaposto e nessuna connessione automatica.
-    const ENGINE_HTTP_URL = String(window.ZERO_ENGINE_HTTP_URL || "").trim().replace(/\/+$/, "");
+    // Endpoint Render staging verificato nell'account: zero-legend-staging.
+    // Il WebSocket viene derivato come wss://zero-legend-staging.onrender.com/ws.
+    // La connessione resta inattiva fino all'azione esplicita di avvio dal pannello.
+    const ENGINE_HTTP_URL = String(window.ZERO_ENGINE_HTTP_URL || "https://zero-legend-staging.onrender.com").trim().replace(/\/+$/, "");
     const ENGINE_WS_URL = ENGINE_HTTP_URL
         ? ENGINE_HTTP_URL.replace(/^http:/i, "ws:").replace(/^https:/i, "wss:") + "/ws"
         : "";
