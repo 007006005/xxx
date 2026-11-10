@@ -20,14 +20,21 @@ Set these environment variables in the Render service:
 | `DB_PORT` | No | Defaults to 3306 |
 | `DB_SSL` | No | Set to `true` when the database requires verified TLS |
 | `MYSQL_URL` | Alternative | MySQL connection URL instead of individual DB variables |
-| `GAME_SERVER_ALLOWLIST` | Yes | Comma-separated exact hostnames of private/explicitly authorized WSS game servers |
+| `GAME_SERVER_ALLOWLIST` | Yes | Comma-separated authorized root domains; the engine accepts the root and its subdomains over WSS |
 | `MAX_BOTS_PER_SESSION` | No | Global per-session cap; defaults to 40 |
 | `BOT_RECONNECT_ATTEMPTS` | No | Reconnect attempt cap; defaults to 8 |
-| `CORS_ORIGINS` | Recommended | Comma-separated browser origins allowed to call the API; defaults to `https://agar.io,https://www.agar.io` |
+| `CORS_ORIGINS` | Recommended | Comma-separated browser origins allowed to call the API; defaults to the eight HTTPS origins for Agar.io, Delt.io, Agar.cc, and Agar.su |
 
 *Use either `MYSQL_URL` or the individual `DB_*` variables. The license table must contain `license_key`, `is_active`, `expire_date`, and `max_bots` columns.
 
-`GAME_SERVER_ALLOWLIST` accepts hostnames only, not URLs. The engine rejects non-WSS URLs and any host not explicitly listed. Do not add public game hosts unless you own or are expressly authorized to operate that server.
+`GAME_SERVER_ALLOWLIST` accepts domain names only, not URLs. For the four authorized services confirmed for this deployment, set:
+
+```text
+GAME_SERVER_ALLOWLIST=agar.io,delt.io,agar.cc,agar.su
+CORS_ORIGINS=https://agar.io,https://www.agar.io,https://delt.io,https://www.delt.io,https://agar.cc,https://www.agar.cc,https://agar.su,https://www.agar.su
+```
+
+The engine accepts each listed root domain and its subdomains (for example, a dynamic WebSocket host under `agar.io`), but rejects hosts outside those DNS boundaries and rejects non-WSS URLs. Only retain domains for which you have explicit authorization to operate automated clients.
 
 ## Render commands
 
