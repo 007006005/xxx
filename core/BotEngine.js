@@ -204,21 +204,6 @@ export default class BotEngine {
     return this.status(ownerId);
   }
 
-  command(ownerId, action) {
-    const session = this.sessions.get(ownerId);
-    if (!session) throw new Error("Nessuna sessione bot attiva");
-    if (action === "split") {
-      for (const bot of session.bots) bot.split();
-    } else if (action === "eject") {
-      for (const bot of session.bots) bot.eject();
-    } else if (action === "reconnect") {
-      for (const bot of session.bots) bot.reconnect();
-    } else {
-      throw new Error("Comando bot non supportato");
-    }
-    return this.status(ownerId);
-  }
-
   updateTarget(ownerId, x, y) {
     const session = this.sessions.get(ownerId);
     if (!session) return false;
