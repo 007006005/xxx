@@ -10,6 +10,8 @@ This branch separates the v6.28 control panel from the bot runtime.
 
 ## Render configuration
 
+The userscript does not contain a hard-coded Render hostname. Set `window.ZERO_ENGINE_HTTP_URL` in a trusted page bootstrap/configuration you control (for example `https://your-render-service.onrender.com`). If it is absent, all Render calls remain disabled. The WebSocket URL is derived from this HTTPS base.
+
 Set these environment variables in the Render service:
 
 | Variable | Required | Purpose |
@@ -20,21 +22,22 @@ Set these environment variables in the Render service:
 | `DB_PORT` | No | Defaults to 3306 |
 | `DB_SSL` | No | Set to `true` when the database requires verified TLS |
 | `MYSQL_URL` | Alternative | MySQL connection URL instead of individual DB variables |
-| `GAME_SERVER_ALLOWLIST` | Yes | Comma-separated authorized root domains; the engine accepts the root and its subdomains over WSS |
+| `GAME_SERVER_ALLOWLIST` | Yes | Comma-separated private, explicitly authorized server hostnames; public game domains are rejected |
 | `MAX_BOTS_PER_SESSION` | No | Global per-session cap; defaults to 40 |
 | `BOT_RECONNECT_ATTEMPTS` | No | Reconnect attempt cap; defaults to 8 |
 | `CORS_ORIGINS` | Recommended | Comma-separated browser origins allowed to call the API; defaults to the eight HTTPS origins for Agar.io, Delt.io, Agar.cc, and Agar.su |
 
 *Use either `MYSQL_URL` or the individual `DB_*` variables. The license table must contain `license_key`, `is_active`, `expire_date`, and `max_bots` columns.
 
-`GAME_SERVER_ALLOWLIST` accepts domain names only, not URLs. For the four authorized services confirmed for this deployment, set:
+`GAME_SERVER_ALLOWLIST` accepts domain names only, not URLs. Configure the exact private server hostname supplied by the server operator; do not put `agar.io`, `delt.io`, `agar.cc`, or `agar.su` in `GAME_SERVER_ALLOWLIST`. Those public game services are deliberately blocked for bot connections. Example (replace with your own private hostname):
 
 ```text
-GAME_SERVER_ALLOWLIST=agar.io,delt.io,agar.cc,agar.su
+GAME_CONNECTIONS_ENABLED=false
+GAME_SERVER_ALLOWLIST=game.example.net
 CORS_ORIGINS=https://agar.io,https://www.agar.io,https://delt.io,https://www.delt.io,https://agar.cc,https://www.agar.cc,https://agar.su,https://www.agar.su
 ```
 
-The engine accepts each listed root domain and its subdomains (for example, a dynamic WebSocket host under `agar.io`), but rejects hosts outside those DNS boundaries and rejects non-WSS URLs. Only retain domains for which you have explicit authorization to operate automated clients.
+Set `GAME_CONNECTIONS_ENABLED=true` only after confirming that the hostname is a private server you control or one that explicitly authorizes automated clients. The backend requires WSS and an exact root/subdomain boundary match. The userscript has separate local settings for each of the four page domains.
 
 ## Render commands
 
