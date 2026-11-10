@@ -3,7 +3,7 @@ import { WebSocket } from "ws";
 const WS_CONNECTING = 0;
 const WS_OPEN = 1;
 const isArrayBuffer = (value) => Object.prototype.toString.call(value) === "[object ArrayBuffer]";
-const SERVER_RE = /^wss:\/\/([^/]+)(?:\/.*)?$/i;
+const SERVER_RE = /wss:\/\/([\w.-]+\/[\w-+\/[\d-]+)/;
 let activeBotCount = 1;
 export function setActiveBotCount(value) {
   activeBotCount = Math.max(1, Number(value) || 1);
