@@ -1,244 +1,233 @@
-// server.js — Zero The Legend Backend PRO (Complete & Optimized for Render with License Verification)
-import express from 'express';
-import cors from 'cors';
-import { WebSocketServer } from 'ws';
-import { config } from './config/index.js';
-import Client from './core/Client.js';
-import { helper, logger } from "./utils/index.js";
-import TokenManager from './core/TokenManager.js';
-import { fetchProxies } from './scripts/fetchProxies.js';
-import ProxyRotator from './core/ProxyRotator.js';
-import { HttpsProxyAgent } from 'https-proxy-agent';
-import botManagerRouter from './botManager.js';
-import mysql from 'mysql2/promise';
+import crypto from "node:crypto";
+import express from "express";
+import cors from "cors";
+import mysql from "mysql2/promise";
+import { WebSocketServer, WebSocket } from "ws";
+import BotEngine from "./core/BotEngine.js";
+import { createLicenseToken, licenseAuth, verifyLicenseToken } from "./core/LicenseAuth.js";
+import createBotManagerRouter from "./botManager.js";
 
-const manager = new TokenManager();
-const proxyRotator = new ProxyRotator([], {
-  retryTimeout: config.proxySettings?.retryTimeout ?? 60 * 1000,
-});
+const app = express();
+const engine = new BotEngine();
+const PORT = Number(process.env.PORT) || 3000;
 
-// ═══ Connessione Database per Verifica Licenze ═══
-const dbPool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'master_portal',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
-});
+const mysqlUrl = process.env.MYSQL_URL ||
+  (String(process.env.DATABASE_URL || "").startsWith("mysql://") ? process.env.DATABASE_URL : "");
+
+let dbPool = null;
+if (mysqlUrl) {
+  dbPool = mysql.createPool(mysqlUrl);
+} else if (process.env.DB_HOST && process.env.DB_USER && process.env.DB_NAME) {
+  dbPool = mysql.createPool({
+    host: process.env.DB_HOST,
+    port: Number(process.env.DB_PORT) || 3306,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD || "",
+    database: process.env.DB_NAME,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+    ...(process.env.DB_SSL === "true" ? { ssl: { rejectUnauthorized: true } } : {}),
+  });
+}
 
 async function validateLicenseKey(licenseKey) {
-  if (!licenseKey) return { valid: false, reason: "Chiave licenza mancante" };
+  if (!dbPool) {
+    return { valid: false, reason: "Database licenze non configurato" };
+  }
+  if (typeof licenseKey !== "string" || !licenseKey.trim()) {
+    return { valid: false, reason: "Chiave licenza mancante" };
+  }
+
   try {
     const [rows] = await dbPool.query(
-      "SELECT * FROM licenses WHERE license_key = ? AND is_active = 1 AND (expire_date IS NULL OR expire_date > NOW())",
-      [licenseKey]
+      "SELECT license_key, expire_date, max_bots FROM licenses WHERE license_key = ? AND is_active = 1 AND (expire_date IS NULL OR expire_date > NOW()) LIMIT 1",
+      [licenseKey.trim()]
     );
-    if (rows.length === 0) {
-      return { valid: false, reason: "Licenza non valida o scaduta" };
-    }
+    if (!rows.length) return { valid: false, reason: "Licenza non valida o scaduta" };
     return { valid: true, data: rows[0] };
-  } catch (err) {
-    logger.error(`[DB Error] Errore verifica licenza: ${err.message}`);
-    return { valid: false, reason: "Errore interno server database" };
+  } catch (error) {
+    console.error("[license-db]", error.message);
+    return { valid: false, reason: "Servizio licenze temporaneamente non disponibile" };
   }
 }
 
-// ═══ Express App & HTTP Server ═══
-const app = express();
+const requireLicense = licenseAuth(validateLicenseKey);
 
-app.use(cors());
-app.use(express.json());
+const allowedOrigins = String(process.env.CORS_ORIGINS || "")
+  .split(",").map((origin) => origin.trim()).filter(Boolean);
 
-// Registrazione rotte API
-app.use('/api', botManagerRouter);
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || !allowedOrigins.length || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error("Origin non autorizzata"));
+  },
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
+app.use(express.json({ limit: "32kb" }));
 
-// ═══ Endpoint di Verifica Licenza ═══
-app.post('/api/verify-license', async (req, res) => {
-  const { licenseKey } = req.body;
+const verifyAttempts = new Map();
+function allowVerifyAttempt(ip) {
+  const now = Date.now();
+  const current = verifyAttempts.get(ip);
+  if (!current || now - current.startedAt > 60_000) {
+    verifyAttempts.set(ip, { startedAt: now, count: 1 });
+    return true;
+  }
+  current.count += 1;
+  return current.count <= 10;
+}
+
+app.post("/api/verify-license", async (req, res) => {
+  const ip = req.ip || req.socket.remoteAddress || "unknown";
+  if (!allowVerifyAttempt(ip)) {
+    return res.status(429).json({ valid: false, message: "Troppi tentativi. Riprova tra un minuto." });
+  }
+
+  const licenseKey = String(req.body?.licenseKey || req.body?.key || "").trim();
   const result = await validateLicenseKey(licenseKey);
   if (!result.valid) {
     return res.status(401).json({ valid: false, message: result.reason });
   }
-  return res.json({
-    valid: true,
-    licenseKey: result.data.license_key,
-    expireDate: result.data.expire_date,
-    maxBots: result.data.max_bots || 200
-  });
-});
 
-// Health check essenziale per Render
-app.get(['/', '/health'], (req, res) => {
-  res.type('text/plain').send('ZeroTheLegend Backend OK');
-});
-
-// Statistiche live
-if (config.stats?.enable) {
-  app.get(config.stats?.path || '/stats', (req, res) => {
-    const uptime = Math.floor((Date.now() - globalStats.startTime) / 1000);
-    res.json({
-      version: '9.9.0',
-      uptime,
-      connectedClients: globalStats.connectedClients,
-      totalBotsSpawned: globalStats.totalBotsSpawned,
-      validTokens: manager.vt?.length ?? 0,
-      proxies: helper.proxies.length,
+  try {
+    const maxBots = Math.max(1, Math.min(
+      Number(result.data.max_bots) || 1,
+      Number(process.env.MAX_BOTS_PER_SESSION) || 40
+    ));
+    const access = createLicenseToken(licenseKey, maxBots);
+    return res.json({
+      valid: true,
+      token: access.token,
+      tokenType: "Bearer",
+      expiresIn: access.expiresIn,
+      expireDate: result.data.expire_date,
+      maxBots,
     });
-  });
-}
+  } catch (error) {
+    return res.status(503).json({ valid: false, message: error.message });
+  }
+});
 
-// Statistiche proxy
-app.get('/proxy-stats', (req, res) => {
+app.use("/api", createBotManagerRouter({ engine, requireLicense }));
+
+app.get(["/", "/health"], (_req, res) => {
+  res.json({ status: "ok", service: "ZeroTheLegend Bot Engine" });
+});
+
+app.get("/stats", (_req, res) => {
   res.json({
-    enabled: !!config.proxySettings.enableProxy,
-    proxiesRotated: globalStats.proxiesRotated,
-    proxyFailures: globalStats.proxyFailures,
-    ...proxyRotator.getStats(),
+    uptimeSeconds: Math.floor(process.uptime()),
+    connectedPanels: connectedPanels.size,
+    ...engine.stats(),
   });
 });
 
-const port = process.env.PORT || config.serverSettings.port || 3000;
-const server = app.listen(port, () => {
-  logger.info(`Server started on port ${port} with ${helper.proxies.length} proxies`);
+const server = app.listen(PORT, () => {
+  console.log(`ZeroTheLegend backend listening on ${PORT}`);
 });
 
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({ noServer: true, maxPayload: 4096 });
+const connectedPanels = new Set();
 
-// ═══ Statistiche globali & Stato condiviso ═══
-const globalStats = {
-  connectedClients: 0,
-  totalBotsSpawned: 0,
-  startTime: Date.now(),
-  proxiesRotated: 0,
-  proxyFailures: 0,
-};
-
-let currentBotConfig = {
-  isRunning: false,
-  botCount: 10,
-  agarServer: "wss://agar.io",
-  spawnPointActive: false,
-  spawnPointX: 0,
-  spawnPointY: 0
-};
-
-const syncProxyRotator = () => proxyRotator.setProxies(helper.proxies);
-
-helper.getProxy = function getProxy() {
-  if (!config.proxySettings.enableProxy) return undefined;
-  const proxy = proxyRotator.getNextProxy();
-  if (!proxy) return undefined;
-  globalStats.proxiesRotated++;
-  const agent = new HttpsProxyAgent(`${config.proxySettings.protocol}://${proxy}`);
-  agent.proxyAddress = proxy;
-  return agent;
-};
-
-// ═══ WebSocket Server ═══
-wss.on('connection', (ws) => {
-  const maxC = config.serverSettings.maxClients || 5000;
-  if (globalStats.connectedClients >= maxC) {
-    logger.warn(`Max clients (${maxC}) reached, rejecting connection`);
-    ws.close(1013, 'Server full');
+server.on("upgrade", (request, socket, head) => {
+  const pathname = new URL(request.url, "http://localhost").pathname;
+  if (pathname !== "/ws") {
+    socket.destroy();
     return;
   }
+  wss.handleUpgrade(request, socket, head, (ws) => {
+    wss.emit("connection", ws, request);
+  });
+});
 
-  const client = new Client(ws, globalStats);
-  ws.activeClient = client;
-  globalStats.connectedClients++;
-  logger.info(`Client Connected (${globalStats.connectedClients}/${maxC})`);
+wss.on("connection", (ws) => {
+  let ownerId = null;
+  let authTimer = setTimeout(() => {
+    try { ws.close(1008, "Autenticazione richiesta"); } catch {}
+  }, 8000);
 
-  if (currentBotConfig.isRunning) {
-    client.startBots(currentBotConfig.botCount, currentBotConfig.agarServer);
-    globalStats.totalBotsSpawned += currentBotConfig.botCount;
-  }
-
-  const handleDisconnect = () => {
-    client.stopBots();
-    globalStats.connectedClients = Math.max(0, globalStats.connectedClients - 1);
-    logger.warn('Client Disconnected!');
-  };
-
-  ws.on('message', (buffer) => {
+  ws.on("message", async (data, isBinary) => {
     try {
-      client.handleMessage(buffer);
-      if (buffer.length > 0 && buffer[0] === 15) {
-        client.botAi = true;
+      if (!ownerId) {
+        if (isBinary) return ws.close(1008, "Primo messaggio di autenticazione richiesto");
+        const authMessage = JSON.parse(data.toString("utf8"));
+        if (authMessage.type !== "auth" || typeof authMessage.token !== "string") {
+          return ws.close(1008, "Messaggio di autenticazione non valido");
+        }
+
+        const payload = verifyLicenseToken(authMessage.token);
+        const license = await validateLicenseKey(payload.sub);
+        if (!license.valid) return ws.close(1008, "Licenza non valida");
+
+        ownerId = crypto.createHash("sha256").update(payload.sub).digest("hex");
+        clearTimeout(authTimer);
+        authTimer = null;
+        connectedPanels.add(ownerId);
+        engine.setPanelConnected(ownerId, true);
+        ws.send(JSON.stringify({ type: "ready", status: engine.status(ownerId) }));
+        return;
       }
-    } catch (e) {
-      logger.warn(`Server: corrupted message — dropped: ${e.message}`);
+
+      if (isBinary) {
+        const packet = Buffer.from(data);
+        if (packet.length >= 9 && packet.readUInt8(0) === 16) {
+          engine.updateTarget(ownerId, packet.readInt32LE(1), packet.readInt32LE(5));
+        }
+        return;
+      }
+
+      const message = JSON.parse(data.toString("utf8"));
+      if (message.type === "ping") {
+        ws.send(JSON.stringify({ type: "pong", at: Date.now() }));
+      } else if (message.type === "status") {
+        ws.send(JSON.stringify({ type: "status", status: engine.status(ownerId) }));
+      }
+    } catch {
+      try { ws.close(1008, "Messaggio non valido"); } catch {}
     }
   });
 
-  ws.on('close', handleDisconnect);
-  ws.on('error', handleDisconnect);
-
-  const heartbeatMs = config.serverSettings.heartbeatInterval || 5000;
-  const heartbeat = setInterval(() => {
-    const idle = Date.now() - (client.lastActivity || Date.now());
-    if (idle > 60000) {
-      logger.warn(`Client zombie detected (idle ${Math.floor(idle/1000)}s), closing`);
-      clearInterval(heartbeat);
-      ws.terminate();
+  ws.on("close", () => {
+    if (authTimer) clearTimeout(authTimer);
+    if (ownerId) {
+      connectedPanels.delete(ownerId);
+      // Il pannello può disconnettersi: la sessione bot resta attiva.
+      engine.setPanelConnected(ownerId, false);
     }
-  }, heartbeatMs);
-
-  ws.on('close', () => clearInterval(heartbeat));
-});
-
-// ═══ Inizializzazione Proxies & Token ═══
-helper.setupProxies();
-syncProxyRotator();
-
-fetchProxies({ skipTest: true }).then(count => {
-  if (count > 0) {
-    helper.setupProxies();
-    syncProxyRotator();
-  }
-  logger.info(`Fetched ${count} fresh proxies`);
-}).catch(e => {
-  logger.warn(`Proxy fetch failed: ${e.message}`);
-});
-
-const proxyRefreshInterval = setInterval(() => {
-  fetchProxies({ skipTest: true }).then(count => {
-    if (count > 0) {
-      helper.setupProxies();
-      syncProxyRotator();
-    }
-    logger.info(`Refreshed ${count} proxies`);
-  }).catch(e => {
-    logger.warn(`Proxy refresh failed: ${e.message}`);
   });
-}, 60 * 60 * 1000);
 
-manager.checkTokens((count) => {
-  logger.info(`TokenManager: ${count} valid token(s) loaded`);
+  ws.on("error", () => {
+    if (authTimer) clearTimeout(authTimer);
+  });
 });
 
-// ═══ Graceful Shutdown ═══
 let shuttingDown = false;
-const gracefulShutdown = (signal) => {
+async function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
-  logger.info(`Received ${signal}, shutting down gracefully...`);
-  clearInterval(proxyRefreshInterval);
-  proxyRotator.destroy();
-  wss.clients.forEach((ws) => {
-    if (ws.readyState === ws.OPEN) ws.close(1001, 'Server shutting down');
-  });
-  wss.close(() => {
-    server.close(() => {
-      logger.info('Server closed');
-      process.exit(0);
-    });
-  });
-  setTimeout(() => process.exit(1), 8000);
-};
+  console.log(`Received ${signal}; stopping bot sessions`);
+  engine.stopAll();
 
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+  for (const ws of wss.clients) {
+    if (ws.readyState === WebSocket.OPEN) ws.close(1001, "Server shutdown");
+  }
 
-export { manager, globalStats, proxyRotator, dbPool, validateLicenseKey };
+  wss.close();
+  server.close(async () => {
+    if (dbPool) {
+      try { await dbPool.end(); } catch {}
+    }
+    process.exit(0);
+  });
+
+  setTimeout(() => process.exit(1), 8000).unref();
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
+
+export { app, server, engine, validateLicenseKey };
