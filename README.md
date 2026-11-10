@@ -59,3 +59,14 @@ The bot session is owned by the backend, not by the panel socket. Closing the br
 ## Important deployment note
 
 The Render service needs the same MySQL license data used by the portal. If the DB is not configured, license verification fails closed and bot commands are rejected. Sessions are held in process memory: a Render restart or redeploy stops active sessions.
+
+
+## Autenticazione licenze RS256 (separata dal motore)
+
+- Il portale PHP è l'unica autorità delle licenze e firma JWT RS256.
+- Il token deve avere `iss=https://master-elettroerosioni.it`, `aud=zero-render-engine`, `sub=SHA-256 esadecimale della chiave licenza`, `iat`, `exp` (massimo 15 minuti) e `maxBots` (intero 1–200).
+- Render verifica soltanto la firma con `LICENSE_PUBLIC_KEY`; non riceve chiavi licenza e non usa un database licenze.
+- Il portale deve conservare la chiave privata RSA in una variabile d'ambiente server-side chiamata `LIC_PRIVATE_KEY`; non inserirla nel repository.
+- Configurare su Render `LICENSE_PUBLIC_KEY` con la corrispondente chiave pubblica PEM. Rimuovere le vecchie variabili `LICENSE_TOKEN_SECRET`, `MYSQL_URL`, `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` se non servono ad altri componenti.
+- Lo userscript usa il token restituito da `license_api.php?action=verify`; non chiama un endpoint Render per inviare la chiave originale.
+- Le connessioni ai server di gioco restano disabilitate finché `GAME_CONNECTIONS_ENABLED` non è esplicitamente abilitato e il server WSS privato non è in `GAME_SERVER_ALLOWLIST`.
