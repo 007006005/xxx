@@ -192,28 +192,16 @@ export default class Minion {
       this.y = sumY / count;
       this.size = totalSize / count;
 
-      let target;
       if (this.config.spawnPointActive) {
-        target = {
-          x: Number(this.config.spawnPointX) || 0,
-          y: Number(this.config.spawnPointY) || 0
-        };
+        this.moveTo(Number(this.config.spawnPointX) || 0, Number(this.config.spawnPointY) || 0);
       } else if (this.followMouse) {
-        target = {
-          x: Number(this.client.userX) / (this.rX || 1),
-          y: Number(this.client.userY) / (this.rY || 1)
-        };
+        this.moveTo(
+          Number(this.client.userX) / (this.rX || 1),
+          Number(this.client.userY) / (this.rY || 1)
+        );
       } else {
-        const pellet = this.nearestPellet(this.x, this.y);
-        target = pellet ? { x: pellet.x, y: pellet.y } : this.nearestPlayer(this.x, this.y, this.size);
+        this.move();
       }
-
-      const moveBuf = new SmartBuffer();
-      moveBuf.writeUInt8(16);
-      moveBuf.writeInt32LE(Math.round(target.x));
-      moveBuf.writeInt32LE(Math.round(target.y));
-      moveBuf.writeUInt32LE(0);
-      this.send(moveBuf.toBuffer());
     } else {
       this.isAlive = false;
       if (Math.random() < 0.1) {
@@ -269,6 +257,14 @@ export default class Minion {
 
   split() { this.send(new Uint8Array([17]), true); }
   eject() { this.send(new Uint8Array([21]), true); }
+
+  reconnect() {
+    this.stop();
+    this.isClosed = false;
+    this.reconnectAttempts = 0;
+    this.connect();
+  }
+
   stop() {
     this.isClosed = true;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
