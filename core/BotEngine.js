@@ -153,6 +153,11 @@ export default class BotEngine {
     const session = this.sessions.get(ownerId);
     if (!session) throw new Error("Nessuna sessione bot attiva");
 
+    if (Array.isArray(patch.botNames)) {
+      const names = patch.botNames.map((name) => String(name).trim()).filter(Boolean);
+      if (names.length) session.controller.config.names = names;
+    }
+
     if (patch.botCount !== undefined && Number(patch.botCount) !== session.botCount) {
       const nextCount = clampCount(patch.botCount, session.licenseMaxBots);
       if (nextCount < session.bots.length) {
@@ -171,11 +176,6 @@ export default class BotEngine {
       session.botCount = nextCount;
       session.controller.config.botCount = nextCount;
       setActiveBotCount(this.totalBots());
-    }
-
-    if (Array.isArray(patch.botNames)) {
-      const names = patch.botNames.map((name) => String(name).trim()).filter(Boolean);
-      if (names.length) session.controller.config.names = names;
     }
 
     const booleanFields = [
