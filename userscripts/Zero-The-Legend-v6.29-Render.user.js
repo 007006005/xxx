@@ -50,7 +50,6 @@
         : "";
     const engineConfigured = () => /^https:\/\//i.test(ENGINE_HTTP_URL) && Boolean(ENGINE_WS_URL);
     let engineAccessToken = null;
-    let engineTokenRefreshTimer = null;
 
     const __zeroMain = function () {
         'use strict';
@@ -1536,6 +1535,7 @@
             const res = await verify(s.key, s.user, true); // heartbeat: non prende il controllo di una sessione più recente
             if (!res || !res.valid) return lockout(reasonText(res, detectLang()));
             s.exp = res.expires_ts; s.type = res.type; s.maxBots = res.max_bots; save(s);
+            try { acceptPortalToken(res, s); } catch (tokenError) { engineAccessToken = null; console.warn("[Zero Render] rinnovo token portale:", tokenError); }
             applyLicenseLimit(res);
         } catch (e) {
             // server irraggiungibile: tollerato solo finché la scadenza salvata non è passata
@@ -1646,40 +1646,29 @@
         (document.documentElement || document.body).appendChild(host);
     }
 
-    async function refreshEngineToken() {
-        const auth = saved();
-        if (!auth || !auth.key) throw new Error("Chiave licenza non disponibile");
-        if (!engineConfigured()) throw new Error("ZERO_ENGINE_HTTP_URL non configurato: Render resta scollegato");
-        const response = await getFetch()(`${ENGINE_HTTP_URL}/api/verify-license`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ licenseKey: auth.key })
-        });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok || !data.valid || !data.token) throw new Error(data.message || "Verifica licenza Render non riuscita");
-        engineAccessToken = data.token;
-        auth.engineToken = data.token;
-        auth.engineTokenExpiresAt = Date.now() + (Number(data.expiresIn) || 900) * 1000;
-        save(auth);
-        if (Number(data.maxBots) > 0) licenseMaxBots = Math.min(licenseMaxBots, Number(data.maxBots));
-        return data;
+    function acceptPortalToken(res, auth = saved()) {
+        if (!res || !res.valid || typeof res.token !== "string" || !res.token) {
+            engineAccessToken = null;
+            throw new Error("Il portale non ha restituito un token di accesso valido");
+        }
+        if (!engineConfigured()) throw new Error("Endpoint Render non configurato");
+        engineAccessToken = res.token;
+        if (auth) {
+            auth.engineToken = res.token;
+            auth.engineTokenExpiresAt = Number(res.token_expires_ts || 0) * 1000 || (Date.now() + 15 * 60 * 1000);
+            save(auth);
+        }
+        if (Number(res.max_bots) > 0) licenseMaxBots = Math.min(licenseMaxBots, Number(res.max_bots));
+        return res;
     }
 
     async function afterAuth(res) {
         applyLicenseLimit(res);
-        try {
-            await refreshEngineToken();
-        } catch (error) {
-            engineAccessToken = null;
-            console.warn("[Zero Render] autenticazione backend non riuscita:", error);
-        }
+        try { acceptPortalToken(res); }
+        catch (error) { engineAccessToken = null; console.warn("[Zero Render] token portale non valido:", error); }
         start();
         mountLicenseBar();
         setInterval(recheck, RECHECK_MS);
-        if (engineTokenRefreshTimer) clearInterval(engineTokenRefreshTimer);
-        engineTokenRefreshTimer = setInterval(() => {
-            refreshEngineToken().catch((error) => console.warn("[Zero Render] rinnovo token:", error));
-        }, 10 * 60 * 1000);
     }
 
     function showLogin(errMsg, lockedLang) {
