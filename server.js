@@ -1,16 +1,3 @@
-"use strict";
-/*
- * ZERO ENGINE - server per Render
- * Lo userscript si collega a wss://<servizio>.onrender.com e manda comandi JSON.
- * Questo server apre le connessioni dei bot verso il server di gioco e le gestisce.
- *
- * Variabili d'ambiente (tutte opzionali):
- *   LICENSE_API       URL di verifica licenza (default: il tuo license_api.php)
- *   ENGINE_SECRET     inviato come header X-Engine-Secret alla verifica (per saltare il controllo IP lato PHP)
- *   ALLOW_ANON=1      NON verifica la licenza (solo per test)
- *   ALLOWED_HOST_RE   regex sugli host di gioco ammessi (default: agar)
- *   MAX_BOTS_PER_SESSION (default 200), MAX_BOTS_TOTAL (default 200)
- */
 const http = require("http");
 const { WebSocketServer, WebSocket } = require("ws");
 
