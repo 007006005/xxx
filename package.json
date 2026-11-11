@@ -1,13 +1,12 @@
 {
-  "name": "xevbots-local",
-  "version": "2.0.0",
-  "private": true,
-  "type": "module",
-  "description": "Server bot — versione privacy (nessuna connessione a server esterni)",
+  "name": "zero-engine",
+  "version": "1.0.0",
+  "description": "Server Render che genera e controlla i bot per lo userscript Zero The Legend",
   "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" },
+  "dependencies": { "ws": "^8.18.0" }
+}
   "dependencies": {
     "api": "^6.1.3",
     "boxen": "^8.0.0",
