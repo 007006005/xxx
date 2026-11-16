@@ -1,5 +1,5 @@
 import { WebSocketServer } from 'ws';
-import http from 'www';
+import http from 'http://';
 
 const PORT = process.env.PORT || 10000;
 const server = http.createServer((req, res) => {
