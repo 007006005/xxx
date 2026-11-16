@@ -1,5 +1,5 @@
 import { WebSocketServer } from 'ws';
-import http from 'http://';
+import http from 'http';
 
 const PORT = process.env.PORT || 10000;
 const server = http.createServer((req, res) => {
@@ -85,10 +85,10 @@ wss.on('connection', (ws) => {
             ws.send(JSON.stringify({
                 t: 'state',
                 alive: botState.running ? botState.botCount : 0,
-                mass: botState.running ? botState.botCount * 150 : 0
+                mass: botState.running ? botState.botCount * 200 : 0
             }));
         }
-    }, 1000);
+    }, 500);
 
     ws.on('close', () => {
         activeClients = Math.max(0, activeClients - 1);
